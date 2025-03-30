@@ -363,11 +363,11 @@ fn directory_guards(path: &Path) -> Result<Vec<File>> {
         #[cfg(windows)]
         {
             use std::os::windows::fs::OpenOptionsExt;
-            // Excluding FILE_SHARE_DELETE prevents directory/junction substitution until the move finishes.
+            // Excluding write/delete sharing prevents directory rename and reparse mutation.
             guards.push(
                 OpenOptions::new()
                     .access_mode(0x80)
-                    .share_mode(3)
+                    .share_mode(1)
                     .custom_flags(0x02200000)
                     .open(&walked)
                     .with_context(|| format!("Cannot guard directory {}", walked.display()))?,
@@ -520,5 +520,41 @@ mod tests {
         assert_eq!(plan.moves[0].state, MoveState::Done);
         plan.undo(&journal).unwrap();
         assert!(!temp.path().join("Documents").exists());
+    }
+    #[test]
+    fn late_collision_does_not_overwrite_and_earlier_moves_can_be_undone() {
+        let (temp, mut items, mut groups) = fixture();
+        fs::write(temp.path().join("b.txt"), "second").unwrap();
+        items.push(Item::from_path(2, temp.path().join("b.txt"), false));
+        groups[0].item_ids.push(2);
+        let mut plan = preview(temp.path(), &items, &groups).unwrap();
+        fs::create_dir(temp.path().join("Documents")).unwrap();
+        fs::write(&plan.moves[1].destination, "late collision").unwrap();
+        let journal = temp.path().join("journal.json");
+        assert!(plan.apply(&journal).is_err());
+        assert_eq!(
+            fs::read_to_string(&plan.moves[1].destination).unwrap(),
+            "late collision"
+        );
+        let mut recovered: Plan = persistence::load(&journal).unwrap();
+        recovered.undo(&journal).unwrap();
+        assert_eq!(fs::read_to_string(&items[0].path).unwrap(), "original");
+        assert_eq!(fs::read_to_string(&items[1].path).unwrap(), "second");
+    }
+    #[test]
+    fn undo_refuses_edited_target_and_tampered_journal_destinations() {
+        let (temp, items, groups) = fixture();
+        let mut plan = preview(temp.path(), &items, &groups).unwrap();
+        let journal = temp.path().join("journal.json");
+        plan.apply(&journal).unwrap();
+        fs::write(&plan.moves[0].destination, "edited after move").unwrap();
+        assert!(plan.undo(&journal).is_err());
+        assert!(!items[0].path.exists());
+        assert_eq!(
+            fs::read_to_string(&plan.moves[0].destination).unwrap(),
+            "edited after move"
+        );
+        plan.moves[0].destination = temp.path().join("Documents/../../escape.txt");
+        assert!(plan.validate().is_err());
     }
 }
