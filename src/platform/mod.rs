@@ -1,8 +1,10 @@
 pub mod secrets;
 mod ui;
-mod updater;
+pub(crate) mod updater;
 
 pub fn run() {
-    if updater::handle_helper_arguments() { return; }
+    if updater::handle_helper_arguments() {
+        return;
+    }
     ui::run();
 }

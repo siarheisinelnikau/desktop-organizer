@@ -17,11 +17,38 @@ pub struct Item {
 
 impl Item {
     pub fn from_path(id: u64, path: PathBuf, directory: bool) -> Self {
-        let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
-        let extension = path.extension().unwrap_or_default().to_string_lossy().to_lowercase();
-        let category = if directory { "Folders" } else { category_for(&extension) }.to_owned();
-        let kind = if directory { "folder" } else if ["lnk", "url"].contains(&extension.as_str()) { "shortcut" } else { "file" }.to_owned();
-        Self { id, path, name, extension, kind, category }
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        let extension = path
+            .extension()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_lowercase();
+        let category = if directory {
+            "Folders"
+        } else {
+            category_for(&extension)
+        }
+        .to_owned();
+        let kind = if directory {
+            "folder"
+        } else if ["lnk", "url"].contains(&extension.as_str()) {
+            "shortcut"
+        } else {
+            "file"
+        }
+        .to_owned();
+        Self {
+            id,
+            path,
+            name,
+            extension,
+            kind,
+            category,
+        }
     }
 }
 
@@ -49,7 +76,15 @@ pub struct Placement {
     pub height: i32,
 }
 impl Default for Placement {
-    fn default() -> Self { Self { monitor: String::new(), x: 48, y: 64, width: 360, height: 340 } }
+    fn default() -> Self {
+        Self {
+            monitor: String::new(),
+            x: 48,
+            y: 64,
+            width: 360,
+            height: 340,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -75,9 +110,16 @@ pub struct Settings {
 }
 impl Default for Settings {
     fn default() -> Self {
-        Self { root: PathBuf::new(), startup_update_check: true, hide_on_fullscreen: true,
-            opacity: 245, accent: 0x00b89a57, ai_base_url: "http://localhost:8080/v1".into(),
-            ai_model: "universal".into(), protected_api_key: vec![] }
+        Self {
+            root: PathBuf::new(),
+            startup_update_check: true,
+            hide_on_fullscreen: true,
+            opacity: 245,
+            accent: 0x00b89a57,
+            ai_base_url: "http://localhost:8080/v1".into(),
+            ai_model: "universal".into(),
+            protected_api_key: vec![],
+        }
     }
 }
 
@@ -92,47 +134,135 @@ pub struct Layout {
 }
 impl Default for Layout {
     fn default() -> Self {
-        Self { schema: 1, next_id: 2, items: vec![], groups: vec![Group { id: 1,
-            name: "Inbox".into(), items: vec![], placement: Placement::default(), collapsed: false }], settings: Settings::default() }
+        Self {
+            schema: 1,
+            next_id: 2,
+            items: vec![],
+            groups: vec![Group {
+                id: 1,
+                name: "Inbox".into(),
+                items: vec![],
+                placement: Placement::default(),
+                collapsed: false,
+            }],
+            settings: Settings::default(),
+        }
     }
 }
 impl Layout {
-    pub fn allocate_id(&mut self) -> u64 { let id = self.next_id; self.next_id += 1; id }
+    pub fn allocate_id(&mut self) -> u64 {
+        let id = self.next_id;
+        self.next_id += 1;
+        id
+    }
     pub fn add_group(&mut self, name: &str) -> Option<u64> {
-        if self.groups.len() >= MAX_GROUPS { return None; }
+        if self.groups.len() >= MAX_GROUPS {
+            return None;
+        }
         let id = self.allocate_id();
         let mut placement = Placement::default();
         placement.x += (self.groups.len() as i32 % 4) * 40;
         placement.y += (self.groups.len() as i32 % 4) * 40;
-        self.groups.push(Group { id, name: name.chars().take(60).collect(), items: vec![], placement, collapsed: false });
+        self.groups.push(Group {
+            id,
+            name: name.chars().take(60).collect(),
+            items: vec![],
+            placement,
+            collapsed: false,
+        });
         Some(id)
     }
     pub fn import(&mut self, path: PathBuf, directory: bool, group: u64) -> bool {
-        if self.items.len() >= MAX_ITEMS || !self.groups.iter().any(|g| g.id == group) { return false; }
-        let id = if let Some(item) = self.items.iter().find(|i| same_path(&i.path, &path)) { item.id }
-            else { let id = self.allocate_id(); self.items.push(Item::from_path(id, path, directory)); id };
+        if self.items.len() >= MAX_ITEMS || !self.groups.iter().any(|g| g.id == group) {
+            return false;
+        }
+        let id = if let Some(item) = self.items.iter().find(|i| same_path(&i.path, &path)) {
+            item.id
+        } else {
+            let id = self.allocate_id();
+            self.items.push(Item::from_path(id, path, directory));
+            id
+        };
         self.assign(id, group);
         true
     }
     pub fn assign(&mut self, item: u64, group: u64) {
-        if !self.items.iter().any(|i| i.id == item) || !self.groups.iter().any(|g| g.id == group) { return; }
-        for g in &mut self.groups { g.items.retain(|id| *id != item); if g.id == group { g.items.push(item); } }
+        if !self.items.iter().any(|i| i.id == item) || !self.groups.iter().any(|g| g.id == group) {
+            return;
+        }
+        for g in &mut self.groups {
+            g.items.retain(|id| *id != item);
+            if g.id == group {
+                g.items.push(item);
+            }
+        }
     }
     pub fn validate(&self) -> anyhow::Result<()> {
         use anyhow::ensure;
         use std::collections::HashSet;
         ensure!(self.schema == 1, "Unsupported layout schema");
-        ensure!(!self.groups.is_empty() && self.groups.len() <= MAX_GROUPS && self.items.len() <= MAX_ITEMS, "Layout size outside limits");
+        ensure!(
+            !self.groups.is_empty()
+                && self.groups.len() <= MAX_GROUPS
+                && self.items.len() <= MAX_ITEMS,
+            "Layout size outside limits"
+        );
         let mut ids = HashSet::new();
-        for i in &self.items { ensure!(ids.insert(i.id) && i.id < self.next_id && i.path.is_absolute(), "Invalid item ID or path"); }
-        for g in &self.groups { ensure!(ids.insert(g.id) && g.id < self.next_id && !g.name.trim().is_empty() && g.name.len() <= 240, "Invalid group ID or name"); }
+        for i in &self.items {
+            ensure!(
+                ids.insert(i.id) && i.id < self.next_id && i.path.is_absolute(),
+                "Invalid item ID or path"
+            );
+        }
+        for g in &self.groups {
+            ensure!(
+                ids.insert(g.id)
+                    && g.id < self.next_id
+                    && !g.name.trim().is_empty()
+                    && g.name.len() <= 240,
+                "Invalid group ID or name"
+            );
+            ensure!(
+                g.placement.x.unsigned_abs() <= 100_000 && g.placement.y.unsigned_abs() <= 100_000,
+                "Group placement outside limits"
+            );
+        }
         let mut assigned = HashSet::new();
-        for g in &self.groups { for id in &g.items { ensure!(self.items.iter().any(|i| i.id == *id) && assigned.insert(*id), "Invalid or duplicate item assignment"); } }
-        ensure!(assigned.len() == self.items.len(), "Unassigned items in layout");
+        for g in &self.groups {
+            for id in &g.items {
+                ensure!(
+                    self.items.iter().any(|i| i.id == *id) && assigned.insert(*id),
+                    "Invalid or duplicate item assignment"
+                );
+            }
+        }
+        ensure!(
+            assigned.len() == self.items.len(),
+            "Unassigned items in layout"
+        );
+        ensure!(
+            self.next_id < u64::MAX - 10_000,
+            "Layout ID space exhausted"
+        );
+        ensure!(
+            self.settings.opacity >= 150
+                && self.settings.ai_base_url.len() <= 4096
+                && self.settings.ai_model.len() < 256
+                && self.settings.protected_api_key.len() <= 64 * 1024,
+            "Settings outside limits"
+        );
         Ok(())
     }
 }
 pub fn same_path(a: &Path, b: &Path) -> bool {
-    #[cfg(windows)] { a.as_os_str().to_string_lossy().eq_ignore_ascii_case(&b.as_os_str().to_string_lossy()) }
-    #[cfg(not(windows))] { a == b }
+    #[cfg(windows)]
+    {
+        a.as_os_str()
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&b.as_os_str().to_string_lossy())
+    }
+    #[cfg(not(windows))]
+    {
+        a == b
+    }
 }
