@@ -29,6 +29,7 @@ pub enum Job {
     Preview(PathBuf, Vec<Item>, Vec<grouping::Suggestion>),
     Apply(Plan, PathBuf),
     Undo(PathBuf),
+    Recover(PathBuf),
     Check,
     Download(updates::Available, PathBuf),
     Install(PathBuf, String),
@@ -41,6 +42,7 @@ pub enum Event {
     Previewed(Result<Plan>),
     Applied(Result<Plan>),
     Undone(Result<Plan>),
+    Recovered(Result<Plan>),
     Checked(Result<Option<updates::Available>>),
     Progress(u64, u64),
     Downloaded(Result<PathBuf>),
@@ -127,6 +129,15 @@ impl Worker {
                                 let result = persistence::load::<Plan>(&journal)
                                     .and_then(|mut p| p.undo(&journal).map(|_| p));
                                 Event::Undone(result)
+                            }
+                            Job::Recover(journal) => {
+                                let result =
+                                    persistence::load::<Plan>(&journal).and_then(|mut plan| {
+                                        plan.recover()?;
+                                        persistence::save(&journal, &plan)?;
+                                        Ok(plan)
+                                    });
+                                Event::Recovered(result)
                             }
                             Job::Check => Event::Checked(updates::check()),
                             Job::Download(update, dir) => {

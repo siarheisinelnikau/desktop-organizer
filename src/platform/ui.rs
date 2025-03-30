@@ -353,6 +353,12 @@ unsafe extern "system" fn foreground_event(
     }
 }
 unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    // DestroyWindow sends this synchronously while App is already borrowed.
+    // Quit must work without a paint or a second mutable borrow, including when hidden.
+    if msg == WM_DESTROY {
+        PostQuitMessage(0);
+        return 0;
+    }
     APP.with(|cell| {
         let Ok(mut borrow) = cell.try_borrow_mut() else {
             if msg == FOREGROUND { FOREGROUND_PENDING.store(false, Ordering::Release); }
@@ -375,6 +381,8 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
             RESTORE => { app.restore(); 0 },
             START => {
                 if app.layout.settings.startup_update_check && let Err(e) = app.worker.submit(Job::Check) { app.set_update(&format!("Startup update check unavailable: {e}")); }
+                let journal=app.data.join("operation.json");
+                if journal.exists() && let Err(e)=app.worker.submit(Job::Recover(journal)) { app.error(e); }
                 let failure = app.data.join("update-error.txt");
                 if let Ok(message) = fs::read_to_string(&failure) { app.set_update(&format!("Previous update failed: {message}")); let _ = fs::remove_file(failure); }
                 app.status("Ready. Choose a folder to import, or drop files onto a group. Files stay in place."); 0
@@ -1466,6 +1474,15 @@ impl App {
                         Err(e) => self.error(e),
                     }
                 }
+                Event::Recovered(result) => match result {
+                    Ok(plan) => {
+                        self.sync_paths(&plan);
+                        self.status("Operation journal reconciled. Use Undo last file operation to reverse completed moves.");
+                    }
+                    Err(e) => {
+                        self.error(e.context("The operation journal needs attention; preserve it and resolve conflicts before further moves"));
+                    }
+                },
                 Event::Checked(result) => {
                     if self.task == 6 {
                         self.task = 0;
@@ -1478,6 +1495,7 @@ impl App {
                                 update.version
                             ));
                             self.available = Some(update);
+                            self.notify_update();
                         }
                         Ok(None) => {
                             self.available = None;
@@ -1623,6 +1641,26 @@ impl App {
             "Windows tray is unavailable; keep the settings window open"
         );
         Ok(())
+    }
+    unsafe fn notify_update(&self) {
+        let Some(update) = &self.available else {
+            return;
+        };
+        let mut icon: NOTIFYICONDATAW = zeroed();
+        icon.cbSize = size_of::<NOTIFYICONDATAW>() as _;
+        icon.hWnd = self.hwnd;
+        icon.uID = 1;
+        icon.uFlags = NIF_INFO;
+        let title = wide(format!("DesktopOrganizer {} is available", update.version));
+        let body = wide(
+            "Open Settings / Updates to review, download and install. Nothing is downloaded automatically.",
+        );
+        let n = title.len().min(icon.szInfoTitle.len() - 1);
+        icon.szInfoTitle[..n].copy_from_slice(&title[..n]);
+        let n = body.len().min(icon.szInfo.len() - 1);
+        icon.szInfo[..n].copy_from_slice(&body[..n]);
+        icon.dwInfoFlags = NIIF_INFO | NIIF_NOSOUND;
+        Shell_NotifyIconW(NIM_MODIFY, &icon);
     }
     unsafe fn tray_menu(&mut self) {
         let menu = CreatePopupMenu();

@@ -136,4 +136,23 @@ mod tests {
         bad[0].item_ids.push(2);
         assert!(validate(&bad, &items).is_err());
     }
+    #[test]
+    fn selected_suggestions_preserve_unselected_references_and_reject_stale_metadata() {
+        let root = std::env::current_dir().unwrap();
+        let mut layout = Layout::default();
+        layout.import(root.join("one.pdf"), false, 1);
+        layout.import(root.join("two.png"), false, 1);
+        let selected = vec![layout.items[0].clone()];
+        let groups = offline(&selected);
+        apply_selected(&mut layout, &groups, &selected).unwrap();
+        layout.validate().unwrap();
+        assert!(
+            layout
+                .groups
+                .iter()
+                .any(|g| g.name == "Inbox" && g.items.contains(&layout.items[1].id))
+        );
+        layout.items[0].name = "changed.pdf".into();
+        assert!(apply_selected(&mut layout, &groups, &selected).is_err());
+    }
 }

@@ -70,3 +70,27 @@ pub fn default_data_dir() -> Result<PathBuf> {
     let local = std::env::var_os("LOCALAPPDATA").context("LOCALAPPDATA is unavailable")?;
     Ok(PathBuf::from(local).join("DesktopOrganizer"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Layout;
+    #[test]
+    fn atomic_replacement_roundtrips_layout_and_preserves_corrupt_input() {
+        fs::create_dir_all(".test-output").unwrap();
+        let temp =
+            tempfile::tempdir_in(std::env::current_dir().unwrap().join(".test-output")).unwrap();
+        let path = temp.path().join("layout.json");
+        let mut layout = Layout::default();
+        save(&path, &layout).unwrap();
+        layout.settings.startup_update_check = false;
+        layout.groups[0].collapsed = true;
+        save(&path, &layout).unwrap();
+        let restored: Layout = load(&path).unwrap();
+        restored.validate().unwrap();
+        assert!(!restored.settings.startup_update_check && restored.groups[0].collapsed);
+        fs::write(&path, b"invalid JSON fixture").unwrap();
+        assert!(load::<Layout>(&path).is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"invalid JSON fixture");
+    }
+}
