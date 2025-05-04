@@ -54,3 +54,16 @@ fn crypt(bytes: &[u8], protect: bool) -> Result<Vec<u8>> {
     }
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn dpapi_roundtrips_only_synthetic_token_and_rejects_invalid_blob() {
+        let plaintext = b"public-fixture-token-not-a-real-secret";
+        let protected = protect(plaintext).unwrap();
+        assert_ne!(protected, plaintext);
+        assert_eq!(unprotect(&protected).unwrap(), plaintext);
+        assert!(unprotect(&[1, 2, 3, 4]).is_err());
+    }
+}
