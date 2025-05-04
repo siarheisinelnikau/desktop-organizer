@@ -1,0 +1,32 @@
+name: Windows verification
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Resolve locked dependencies
+        run: cargo fetch --locked
+      - name: Format, lint, test fixtures and compile
+        shell: pwsh
+        run: ./scripts/check.ps1
+      - name: Prepare portable asset and notices
+        shell: pwsh
+        run: ./scripts/package.ps1
+      - name: Inspect PE headers and embedded manifest without execution
+        shell: pwsh
+        run: |
+          $assets = @(Get-ChildItem -LiteralPath dist -Filter '*.exe')
+          if ($assets.Count -ne 1) { throw 'Expected exactly one executable architecture.' }
+          python scripts/inspect_binary.py $assets[0].FullName
+          if ($LASTEXITCODE -ne 0) { throw 'PE inspection failed.' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DesktopOrganizer-windows-portable
+          path: dist/*
+          if-no-files-found: error
