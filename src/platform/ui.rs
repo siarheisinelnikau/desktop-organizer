@@ -36,6 +36,13 @@ use windows_sys::{
     },
     core::*,
 };
+mod capture;
+mod diagnostic;
+mod theme;
+const PROPOSALS: u16 = 180;
+const PROPOSAL_NAME: u16 = 181;
+const RENAME_PROPOSAL: u16 = 182;
+const ASSIGN_PROPOSAL: u16 = 183;
 
 const MAIN_CLASS: PCWSTR = w!("DesktopOrganizer.Settings.v1");
 const GROUP_CLASS: PCWSTR = w!("DesktopOrganizer.Group.v1");
@@ -134,7 +141,21 @@ struct App {
     dirty: bool,
     main_scroll: POINT,
     tray_message: u32,
+    tray_available: bool,
     hooks: Vec<HWINEVENTHOOK>,
+}
+static CAPTURE_DPI: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+static MAIN_PAINTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static GROUP_PAINTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static LAYOUTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static OWNER_DRAWS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+fn window_dpi(hwnd: HWND) -> u32 {
+    let override_dpi = CAPTURE_DPI.load(Ordering::Relaxed);
+    if override_dpi > 0 {
+        override_dpi
+    } else {
+        unsafe { GetDpiForWindow(hwnd).max(96) }
+    }
 }
 
 fn wide(s: impl AsRef<OsStr>) -> Vec<u16> {
@@ -157,8 +178,19 @@ fn unscale(value: i32, dpi: u32) -> i32 {
 }
 
 pub fn run() {
+    let diagnostic = match capture::Options::parse(std::env::args_os().skip(1)) {
+        Ok(options) => options,
+        Err(error) => {
+            eprintln!("{error:#}");
+            std::process::exit(2);
+        }
+    };
     unsafe {
-        if let Err(error) = startup() {
+        if let Err(error) = startup(diagnostic) {
+            if std::env::args_os().any(|a| a == "--capture" || a == "--diagnose") {
+                eprintln!("{error:#}");
+                std::process::exit(2);
+            }
             MessageBoxW(
                 null_mut(),
                 wide(format!("{error:#}")).as_ptr(),
@@ -168,10 +200,27 @@ pub fn run() {
         }
     }
 }
-unsafe fn startup() -> Result<()> {
+unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
+    trace("startup");
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    let data = persistence::default_data_dir()?;
-    let mutex = CreateMutexW(null(), 0, w!("Local\\DesktopOrganizer.Interactive.v1"));
+    let data = if let Some(options) = &diagnostic {
+        options
+            .output
+            .parent()
+            .context("Capture output needs a parent directory")?
+            .to_path_buf()
+    } else {
+        persistence::default_data_dir()?
+    };
+    let mutex_name = if diagnostic.is_some() {
+        wide(format!(
+            "Local\\DesktopOrganizer.Capture.{}",
+            std::process::id()
+        ))
+    } else {
+        wide("Local\\DesktopOrganizer.Interactive.v1")
+    };
+    let mutex = CreateMutexW(null(), 0, mutex_name.as_ptr());
     ensure!(!mutex.is_null(), "Cannot create instance lock");
     if GetLastError() == ERROR_ALREADY_EXISTS {
         let previous = FindWindowW(MAIN_CLASS, null());
@@ -186,7 +235,9 @@ unsafe fn startup() -> Result<()> {
     }
     // A corrupt or future schema is preserved; never silently replace it with defaults.
     let state = data.join("layout.json");
-    let layout: Layout = if state.exists() {
+    let layout: Layout = if let Some(options) = &diagnostic {
+        options.layout()?
+    } else if state.exists() {
         persistence::load(&state)?
     } else {
         Layout::default()
@@ -251,7 +302,7 @@ unsafe fn startup() -> Result<()> {
         plan_json: String::new(),
         available: None,
         drag: None,
-        hidden: false,
+        hidden: diagnostic.is_some(),
         fullscreen: false,
         save_sequence: 0,
         quitting: None,
@@ -259,18 +310,36 @@ unsafe fn startup() -> Result<()> {
         dirty: false,
         main_scroll: POINT::default(),
         tray_message: RegisterWindowMessageW(w!("TaskbarCreated")),
+        tray_available: false,
         hooks: vec![],
     };
     APP.with(|cell| {
         *cell.borrow_mut() = Some(app);
     });
+    if let Some(options) = &diagnostic {
+        CAPTURE_DPI.store(options.dpi, Ordering::Relaxed);
+    }
     APP.with(|cell| -> Result<()> {
         let mut borrow = cell.borrow_mut();
         let app = borrow.as_mut().unwrap();
         app.create_controls();
         app.refresh();
         app.rebuild_groups()?;
-        app.tray(true)?;
+        if let Some(options) = &diagnostic {
+            app.page = options.page();
+            app.position_controls();
+            app.scope = app.layout.items.clone();
+            if !app.scope.is_empty() {
+                app.set_suggestions(grouping::offline(&app.scope))?;
+            }
+            app.status("Everything here is a reference. Your original files stay in place.");
+            if options.scenario == "error" {
+                app.status(
+                    "Folder unavailable. Choose another folder to keep organizing your files.",
+                );
+            }
+            return Ok(());
+        }
         app.hooks.push(SetWinEventHook(
             EVENT_SYSTEM_FOREGROUND,
             EVENT_SYSTEM_FOREGROUND,
@@ -278,7 +347,7 @@ unsafe fn startup() -> Result<()> {
             Some(foreground_event),
             0,
             0,
-            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+            WINEVENT_OUTOFCONTEXT,
         ));
         app.hooks.push(SetWinEventHook(
             EVENT_OBJECT_LOCATIONCHANGE,
@@ -292,10 +361,31 @@ unsafe fn startup() -> Result<()> {
         app.position_controls();
         Ok(())
     })?;
+    if let Some(options) = diagnostic {
+        let result = if options.diagnose {
+            diagnostic::run(&options, hwnd)
+        } else {
+            capture::save(&options, hwnd)
+        };
+        APP.with(|cell| {
+            if let Some(app) = cell.borrow_mut().take() {
+                for window in app.windows.values() {
+                    DestroyWindow(window.hwnd);
+                }
+                if !app.font.is_null() {
+                    DeleteObject(app.font);
+                }
+            }
+        });
+        DestroyWindow(hwnd);
+        CoUninitialize();
+        CloseHandle(mutex);
+        return result;
+    }
     HOST.store(hwnd as usize, Ordering::Release);
     let monitor = monitor_info(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST));
     let area = monitor.monitorInfo.rcWork;
-    let dpi = GetDpiForWindow(hwnd).max(96);
+    let dpi = window_dpi(hwnd).max(96);
     SetWindowPos(
         hwnd,
         null_mut(),
@@ -306,9 +396,15 @@ unsafe fn startup() -> Result<()> {
         SWP_NOZORDER | SWP_NOACTIVATE,
     );
     ShowWindow(hwnd, SW_SHOW);
+    trace("settings shown");
     PostMessageW(hwnd, START, 0, 0);
     let mut message: MSG = zeroed();
-    while GetMessageW(&mut message, null_mut(), 0, 0) > 0 {
+    loop {
+        let result = GetMessageW(&mut message, null_mut(), 0, 0);
+        if result <= 0 {
+            trace(&format!("message loop ended: {result}"));
+            break;
+        }
         if IsDialogMessageW(hwnd, &message) == 0 {
             TranslateMessage(&message);
             DispatchMessageW(&message);
@@ -332,6 +428,18 @@ unsafe fn startup() -> Result<()> {
     CloseHandle(mutex);
     Ok(())
 }
+fn trace(message: &str) {
+    use std::io::Write;
+    if std::env::var_os("DESKTOP_ORGANIZER_TRACE").is_some()
+        && let Ok(data) = persistence::default_data_dir()
+        && let Ok(mut file) = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(data.join("ui-trace.log"))
+    {
+        let _ = writeln!(file, "{message}");
+    }
+}
 
 unsafe extern "system" fn foreground_event(
     _: HWINEVENTHOOK,
@@ -353,39 +461,56 @@ unsafe extern "system" fn foreground_event(
     }
 }
 unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    if msg == WM_DRAWITEM {
+        return theme::draw_button(lp as *const DRAWITEMSTRUCT);
+    }
+    if msg == WM_CTLCOLORSTATIC {
+        SetBkMode(wp as HDC, TRANSPARENT as _);
+        SetTextColor(wp as HDC, theme::rgb(43, 54, 69));
+        SetBkColor(wp as HDC, theme::rgb(255, 255, 255));
+        return GetStockObject(WHITE_BRUSH) as LRESULT;
+    }
     // DestroyWindow sends this synchronously while App is already borrowed.
     // Quit must work without a paint or a second mutable borrow, including when hidden.
     if msg == WM_DESTROY {
+        trace("settings destroyed");
         PostQuitMessage(0);
         return 0;
     }
-    APP.with(|cell| {
+    let handled=APP.with(|cell| {
         let Ok(mut borrow) = cell.try_borrow_mut() else {
             if msg == FOREGROUND { FOREGROUND_PENDING.store(false, Ordering::Release); }
-            return DefWindowProcW(hwnd, msg, wp, lp);
+            return None;
         };
-        let Some(app) = borrow.as_mut() else { return DefWindowProcW(hwnd, msg, wp, lp); };
+        let app = borrow.as_mut()?;
         let result = match msg {
             WM_COMMAND => {
                 let id = word(wp); let notification = (wp >> 16) as u16;
-                if id == GROUPS && notification == LBN_SELCHANGE as u16 { app.group_selection(); return 0; }
-                if notification == BN_CLICKED as u16 && let Err(e) = app.command(id) { app.error(e); }
+                if id == GROUPS && notification == LBN_SELCHANGE as u16 { app.group_selection(); return Some(0); }
+                if id == PROPOSALS && notification == LBN_SELCHANGE as u16 { app.proposal_selection(); return Some(0); }
+                if ((id==ITEMS||id==AI_ITEMS)&&notification==LBN_SELCHANGE as u16)||(id==ROOT&&notification==EN_CHANGE as u16) {app.update_actions();return Some(0);}
+                if notification == BN_CLICKED as u16 { if let Err(e) = app.command(id) { app.error(e); } app.update_actions(); }
                 0
             },
             WM_SIZE => { app.position_controls(); 0 },
-            WM_GETMINMAXINFO => { let info = &mut *(lp as *mut MINMAXINFO); info.ptMinTrackSize = POINT { x: scale(640, GetDpiForWindow(hwnd)), y: scale(420, GetDpiForWindow(hwnd)) }; 0 },
+            WM_PAINT => { app.paint_main(); 0 },
+            WM_PRINTCLIENT => { app.render_main(wp as HDC); 0 },
+            WM_ERASEBKGND => 1,
+            WM_GETMINMAXINFO => { let info = &mut *(lp as *mut MINMAXINFO); info.ptMinTrackSize = POINT { x: scale(640, window_dpi(hwnd)), y: scale(420, window_dpi(hwnd)) }; 0 },
             WM_VSCROLL | WM_HSCROLL => { app.scroll_main(msg,wp); 0 },
-            WM_MOUSEWHEEL => { let delta=((wp>>16) as u16 as i16) as i32; app.main_scroll.y=(app.main_scroll.y-scale(delta,GetDpiForWindow(hwnd))).max(0); app.position_controls(); 0 },
+            WM_MOUSEWHEEL => { let delta=((wp>>16) as u16 as i16) as i32; app.main_scroll.y=(app.main_scroll.y-scale(delta,window_dpi(hwnd))).max(0); app.position_controls(); 0 },
             WM_DPICHANGED => { let r = &*(lp as *const RECT); SetWindowPos(hwnd, null_mut(), r.left, r.top, r.right-r.left, r.bottom-r.top, SWP_NOZORDER | SWP_NOACTIVATE); app.position_controls(); 0 },
-            WM_CLOSE => { ShowWindow(hwnd, SW_HIDE); 0 },
+            WM_CLOSE => { if app.tray_available { ShowWindow(hwnd, SW_HIDE); } else { app.status("Tray is unavailable. Use Save and quit to exit; settings remain accessible."); } 0 },
             RESTORE => { app.restore(); 0 },
             START => {
+                app.status("Add a folder to get started. Your files stay in place.");
+                app.register_tray();
                 if app.layout.settings.startup_update_check && let Err(e) = app.worker.submit(Job::Check) { app.set_update(&format!("Startup update check unavailable: {e}")); }
                 let journal=app.data.join("operation.json");
                 if journal.exists() && let Err(e)=app.worker.submit(Job::Recover(journal)) { app.error(e); }
                 let failure = app.data.join("update-error.txt");
                 if let Ok(message) = fs::read_to_string(&failure) { app.set_update(&format!("Previous update failed: {message}")); let _ = fs::remove_file(failure); }
-                app.status("Ready. Choose a folder to import, or drop files onto a group. Files stay in place."); 0
+                0
             },
             WORK => { app.worker_events(); 0 },
             WM_TIMER if wp == SAVE_TIMER => { KillTimer(hwnd, SAVE_TIMER); if let Err(e) = app.flush_save() { app.error(e); } 0 },
@@ -399,31 +524,56 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
             },
             WM_QUERYENDSESSION => { app.status("Session ending. Recent changes are saved by the background writer."); 1 },
             WM_DESTROY => { PostQuitMessage(0); 0 },
-            _ if msg == app.tray_message => { if let Err(e) = app.tray(true) { app.error(e); } 0 },
-            _ => DefWindowProcW(hwnd, msg, wp, lp),
+            _ if msg == app.tray_message => { app.register_tray(); 0 },
+            _ => return None,
         };
         // Native menus and dialogs run nested message loops. Their wake message can
         // arrive while App is borrowed, so always drain results after returning.
         if msg != WORK { app.worker_events(); }
-        result
-    })
+        Some(result)
+    });
+    // DefWindowProc can synchronously send WM_CLOSE, WM_SIZE and other messages.
+    // Release App before calling it so those messages reach our actual handlers.
+    handled.unwrap_or_else(|| DefWindowProcW(hwnd, msg, wp, lp))
 }
 
 unsafe extern "system" fn group_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
-    APP.with(|cell| {
+    if msg == WM_NCHITTEST {
+        let hit = DefWindowProcW(hwnd, msg, wp, lp);
+        if hit == HTCLIENT as isize {
+            let mut point = POINT {
+                x: signed_low(lp),
+                y: signed_high(lp),
+            };
+            ScreenToClient(hwnd, &mut point);
+            if point.y >= 0 && point.y < scale(70, window_dpi(hwnd)) {
+                return HTCAPTION as isize;
+            }
+        }
+        return hit;
+    }
+    let handled = APP.with(|cell| {
         let Ok(mut borrow) = cell.try_borrow_mut() else {
-            return DefWindowProcW(hwnd, msg, wp, lp);
+            return None;
         };
-        let Some(app) = borrow.as_mut() else {
-            return DefWindowProcW(hwnd, msg, wp, lp);
-        };
+        let app = borrow.as_mut()?;
         let id = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as u64;
         if id == 0 {
-            return DefWindowProcW(hwnd, msg, wp, lp);
+            return None;
         }
         let result = match msg {
             WM_PAINT => {
-                app.paint_group(id);
+                if IsWindowVisible(hwnd) != 0 && IsIconic(hwnd) == 0 {
+                    app.paint_group(id);
+                } else {
+                    let mut ps: PAINTSTRUCT = zeroed();
+                    BeginPaint(hwnd, &mut ps);
+                    EndPaint(hwnd, &ps);
+                }
+                0
+            }
+            WM_PRINTCLIENT => {
+                app.render_group(id, wp as HDC);
                 0
             }
             WM_ERASEBKGND => 1,
@@ -454,7 +604,7 @@ unsafe extern "system" fn group_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARA
             }
             WM_GETMINMAXINFO => {
                 let p = &mut *(lp as *mut MINMAXINFO);
-                let dpi = GetDpiForWindow(hwnd);
+                let dpi = window_dpi(hwnd);
                 p.ptMinTrackSize = POINT {
                     x: scale(240, dpi),
                     y: scale(90, dpi),
@@ -464,9 +614,9 @@ unsafe extern "system" fn group_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARA
             WM_CLOSE | WM_NCLBUTTONDBLCLK => {
                 if msg == WM_CLOSE || wp == HTCAPTION as usize {
                     app.collapse(id);
-                    return 0;
+                    return Some(0);
                 }
-                DefWindowProcW(hwnd, msg, wp, lp)
+                return None;
             }
             WM_DROPFILES => {
                 app.drop_files(wp as _, id);
@@ -558,15 +708,16 @@ unsafe extern "system" fn group_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARA
                 }
                 0
             }
-            WM_CONTEXTMENU => {
+            WM_CONTEXTMENU | WM_NCRBUTTONUP => {
                 app.group_menu(id);
                 0
             }
-            _ => DefWindowProcW(hwnd, msg, wp, lp),
+            _ => return None,
         };
         app.worker_events();
-        result
-    })
+        Some(result)
+    });
+    handled.unwrap_or_else(|| DefWindowProcW(hwnd, msg, wp, lp))
 }
 
 impl App {
@@ -671,7 +822,6 @@ impl App {
         self.button(SCAN, 1, "Import", (865, 72, 105, 30));
         self.label(1,"Import adds references only. Drag files onto any group; original Desktop icons remain unchanged.",(20,112,950,30));
         self.label(1, "GROUPS", (20, 150, 240, 24));
-        self.label(1, "ITEMS — Ctrl/Shift to select", (290, 150, 680, 24));
         self.control(
             GROUPS,
             1,
@@ -680,6 +830,7 @@ impl App {
             LBS_NOTIFY as u32 | WS_VSCROLL,
             (20, 180, 240, 280),
         );
+        self.label(1, "ITEMS — Ctrl/Shift to select", (290, 150, 680, 24));
         self.control(
             ITEMS,
             1,
@@ -811,6 +962,7 @@ impl App {
         self.control(STATUS, 0, w!("STATIC"), "Ready.", 0, (20, 685, 745, 50));
         self.button(QUIT, 0, "Save and quit", (790, 685, 180, 34));
         DragAcceptFiles(self.hwnd, 1);
+        self.redesign_controls();
     }
     fn c(&self, id: u16) -> HWND {
         self.controls
@@ -843,7 +995,8 @@ impl App {
         self.set(UPDATE_STATUS, text);
     }
     unsafe fn position_controls(&mut self) {
-        let dpi = GetDpiForWindow(self.hwnd).max(96);
+        LAYOUTS.fetch_add(1, Ordering::Relaxed);
+        let dpi = window_dpi(self.hwnd).max(96);
         let mut client = RECT::default();
         GetClientRect(self.hwnd, &mut client);
         for (bar, total, page, pos) in [
@@ -909,11 +1062,20 @@ impl App {
                     SW_HIDE
                 },
             );
+            if matches!(control.id, PAGE_LIBRARY | PAGE_AI | PAGE_SETTINGS) {
+                SetWindowLongPtrW(
+                    control.hwnd,
+                    GWLP_USERDATA,
+                    (control.id - 100 == self.page as u16) as isize,
+                );
+            }
         }
         if !self.font.is_null() {
             DeleteObject(self.font);
         }
         self.font = font;
+        self.update_actions();
+        InvalidateRect(self.hwnd, null(), 0);
     }
     unsafe fn scroll_main(&mut self, message: u32, wp: WPARAM) {
         let bar = if message == WM_VSCROLL {
@@ -925,7 +1087,7 @@ impl App {
         info.cbSize = size_of::<SCROLLINFO>() as _;
         info.fMask = SIF_ALL;
         GetScrollInfo(self.hwnd, bar, &mut info);
-        let amount = scale(30, GetDpiForWindow(self.hwnd));
+        let amount = scale(30, window_dpi(self.hwnd));
         let position = match word(wp) as i32 {
             SB_LINEUP => info.nPos - amount,
             SB_LINEDOWN => info.nPos + amount,
@@ -1003,30 +1165,30 @@ impl App {
                     .map(|g| g.name.as_str())
                     .unwrap_or("?");
                 let text = if list_id == ITEMS {
-                    format!(
-                        "{}   |   {}   |   {}",
-                        item.name,
-                        group,
-                        item.path.display()
-                    )
+                    format!("{}    ·    {}", item.name, group)
                 } else {
-                    format!(
-                        "#{}  {}  [{} / {} / {}]",
-                        item.id, item.name, item.extension, item.kind, item.category
-                    )
+                    format!("{}    ·    {}", item.name, item.category)
                 };
                 SendMessageW(list, LB_ADDSTRING, 0, wide(text).as_ptr() as _);
             }
+            let longest = self
+                .layout
+                .items
+                .iter()
+                .map(|i| i.name.chars().count() + 20)
+                .max()
+                .unwrap_or(0);
             SendMessageW(
                 list,
                 LB_SETHORIZONTALEXTENT,
-                scale(1800, GetDpiForWindow(self.hwnd)) as _,
+                scale((longest * 8) as i32, window_dpi(self.hwnd)) as _,
                 0,
             );
             SendMessageW(list, WM_SETREDRAW, 1, 0);
             InvalidateRect(list, null(), 1);
         }
         self.group_selection();
+        self.update_actions();
         for (id, w) in &self.windows {
             if let Some(g) = self.layout.groups.iter().find(|g| g.id == *id) {
                 SetWindowTextW(
@@ -1053,9 +1215,13 @@ impl App {
         Ok(self.save_sequence)
     }
     unsafe fn command(&mut self, id: u16) -> Result<()> {
+        trace(&format!("command {id}"));
         match id {
             PAGE_LIBRARY | PAGE_AI | PAGE_SETTINGS => {
                 self.page = (id - 100) as u8;
+                if self.page == 2 && SendMessageW(self.c(AI_ITEMS), LB_GETSELCOUNT, 0, 0) <= 0 {
+                    SendMessageW(self.c(AI_ITEMS), LB_SETSEL, 1, -1);
+                }
                 self.position_controls();
                 return Ok(());
             }
@@ -1179,17 +1345,42 @@ impl App {
                 self.invalidate_groups();
                 self.changed();
             }
+            RENAME_PROPOSAL => {
+                let mut groups = ai::parse_content(&self.text(JSON), &self.scope)?;
+                let row = SendMessageW(self.c(PROPOSALS), LB_GETCURSEL, 0, 0);
+                ensure!(row >= 0, "Select a proposed group first");
+                groups[row as usize].name = self.text(PROPOSAL_NAME);
+                grouping::validate(&groups, &self.scope)?;
+                self.set_suggestions(groups)?;
+                self.plan = None;
+            }
+            ASSIGN_PROPOSAL => {
+                let mut groups = ai::parse_content(&self.text(JSON), &self.scope)?;
+                let row = SendMessageW(self.c(PROPOSALS), LB_GETCURSEL, 0, 0);
+                ensure!(row >= 0, "Select a proposed group first");
+                let selected = self.selected_items(AI_ITEMS);
+                ensure!(
+                    !selected.is_empty() && selected.iter().all(|i| self.scope.contains(i)),
+                    "Select files included in this preview"
+                );
+                let ids: Vec<_> = selected.iter().map(|i| i.id).collect();
+                for group in &mut groups {
+                    group.item_ids.retain(|id| !ids.contains(id));
+                }
+                groups[row as usize].item_ids.extend(ids);
+                groups.retain(|g| !g.item_ids.is_empty());
+                grouping::validate(&groups, &self.scope)?;
+                self.set_suggestions(groups)?;
+                self.plan = None;
+            }
             OFFLINE | REQUEST_AI => {
                 self.scope = self.selected_items(AI_ITEMS);
                 ensure!(!self.scope.is_empty(), "Select metadata items first");
                 self.plan = None;
                 if id == OFFLINE {
                     let groups = grouping::offline(&self.scope);
-                    self.set(
-                        JSON,
-                        &serde_json::to_string_pretty(&serde_json::json!({"groups":groups}))?,
-                    );
-                    self.status("Offline suggestion ready. Edit the JSON, then apply visual groups or preview file moves.");
+                    self.set_suggestions(groups)?;
+                    self.status("Preview ready. Rename groups or adjust files, then choose Apply groups. Your files stay in place.");
                 } else {
                     ensure!(
                         self.checked(CONSENT),
@@ -1336,6 +1527,63 @@ impl App {
         }
         Ok(())
     }
+    unsafe fn update_actions(&self) {
+        let ready = self.task == 0 && self.quitting.is_none();
+        let suggested = !self.text(JSON).is_empty();
+        ShowWindow(
+            self.c(ITEMS),
+            if self.page == 1 && !self.layout.items.is_empty() {
+                SW_SHOW
+            } else {
+                SW_HIDE
+            },
+        );
+        for (id, enabled) in [
+            (
+                ASSIGN,
+                ready && SendMessageW(self.c(ITEMS), LB_GETSELCOUNT, 0, 0) > 0,
+            ),
+            (
+                REMOVE,
+                ready && SendMessageW(self.c(ITEMS), LB_GETSELCOUNT, 0, 0) > 0,
+            ),
+            (DELETE_GROUP, ready && self.layout.groups.len() > 1),
+            (
+                CLEAR_KEY,
+                !self.layout.settings.protected_api_key.is_empty(),
+            ),
+            (INSTALL, ready && self.available.is_some()),
+            (APPLY_VISUAL, ready && suggested),
+            (RENAME_PROPOSAL, ready && suggested),
+            (ASSIGN_PROPOSAL, ready && suggested),
+            (OFFLINE, ready && !self.layout.items.is_empty()),
+            (REQUEST_AI, ready && !self.layout.items.is_empty()),
+            (PREVIEW_MOVES, ready && suggested && self.checked(MOVE_OPT)),
+            (APPLY_MOVES, ready && self.plan.is_some()),
+            (SCAN, ready && !self.text(ROOT).trim().is_empty()),
+        ] {
+            EnableWindow(self.c(id), enabled as _);
+        }
+        for id in [PREVIEW_MOVES, APPLY_MOVES, MOVES] {
+            ShowWindow(
+                self.c(id),
+                if self.page == 2 && self.checked(MOVE_OPT) {
+                    SW_SHOW
+                } else {
+                    SW_HIDE
+                },
+            );
+        }
+        let has_journal = self.data.join("operation.json").exists();
+        ShowWindow(
+            self.c(UNDO),
+            if self.page == 2 && (self.checked(MOVE_OPT) || has_journal) {
+                SW_SHOW
+            } else {
+                SW_HIDE
+            },
+        );
+    }
     unsafe fn remove_items(&mut self, ids: &[u64]) {
         self.layout.items.retain(|i| !ids.contains(&i.id));
         for g in &mut self.layout.groups {
@@ -1371,7 +1619,9 @@ impl App {
         }
     }
     unsafe fn worker_events(&mut self) {
+        let mut changed = false;
         while let Ok(event) = self.worker.receiver.try_recv() {
+            changed = true;
             match event {
                 Event::Saved(sequence, result) => match result {
                     Ok(()) => {
@@ -1414,13 +1664,9 @@ impl App {
                     self.task = 0;
                     match result {
                         Ok(groups) => {
-                            self.set(
-                                JSON,
-                                &serde_json::to_string_pretty(
-                                    &serde_json::json!({"groups":groups}),
-                                )
-                                .unwrap(),
-                            );
+                            if let Err(error) = self.set_suggestions(groups) {
+                                self.error(error);
+                            }
                             self.status(
                                 "AI suggestion ready. Review or edit every group before applying.",
                             );
@@ -1558,6 +1804,9 @@ impl App {
                 }
             }
         }
+        if changed {
+            self.update_actions();
+        }
     }
     unsafe fn sync_paths(&mut self, plan: &Plan) {
         for m in &plan.moves {
@@ -1596,9 +1845,7 @@ impl App {
                 self.refresh();
                 self.invalidate_groups();
                 self.changed();
-                self.status(&format!(
-                    "Imported {count} references. Files remain in their original locations."
-                ));
+                self.status(&format!("Added {count} items. Originals stay in place."));
             }
             Err(e) => self.error(e),
         }
@@ -1624,6 +1871,27 @@ impl App {
                     SW_SHOWNOACTIVATE
                 },
             );
+            if !self.hidden && !self.fullscreen {
+                SetWindowPos(
+                    w.hwnd,
+                    HWND_TOP,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                );
+            }
+        }
+    }
+    unsafe fn register_tray(&mut self) {
+        match self.tray(true) {
+            Ok(()) => self.tray_available = true,
+            Err(error) => {
+                self.tray_available = false;
+                self.restore();
+                self.error(error);
+            }
         }
     }
     unsafe fn tray(&self, add: bool) -> Result<()> {
@@ -1760,7 +2028,7 @@ impl App {
                 WS_EX_TOOLWINDOW | WS_EX_LAYERED,
                 GROUP_CLASS,
                 wide(format!("{} — {} items", group.name, group.items.len())).as_ptr(),
-                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_CLIPCHILDREN,
+                WS_POPUP | WS_THICKFRAME | WS_CLIPCHILDREN,
                 0,
                 0,
                 360,
@@ -1798,7 +2066,7 @@ impl App {
         };
         let mut rect = RECT::default();
         GetWindowRect(window.hwnd, &mut rect);
-        let dpi = GetDpiForWindow(window.hwnd).max(96);
+        let dpi = window_dpi(window.hwnd).max(96);
         let monitor = MonitorFromWindow(window.hwnd, MONITOR_DEFAULTTONEAREST);
         let info = monitor_info(monitor);
         if let Some(group) = self.layout.groups.iter_mut().find(|g| g.id == id) {
@@ -1833,17 +2101,17 @@ impl App {
         if group.collapsed {
             return None;
         }
-        let dpi = GetDpiForWindow(window.hwnd).max(96);
+        let dpi = window_dpi(window.hwnd).max(96);
         let mut r = RECT::default();
         GetClientRect(window.hwnd, &mut r);
         let width = unscale(r.right, dpi);
-        let cols = ((width - 24) / 100).max(1);
-        let x = unscale(signed_low(lp), dpi) - 12;
-        let y = unscale(signed_high(lp), dpi) - 42 + window.scroll;
-        if x < 0 || y < 0 || x >= cols * 100 {
-            return None;
-        }
-        group.items.get((y / 92 * cols + x / 100) as usize).copied()
+        let index = group_item_index(
+            unscale(signed_low(lp), dpi),
+            unscale(signed_high(lp), dpi),
+            width,
+            window.scroll,
+        )?;
+        group.items.get(index).copied()
     }
     unsafe fn open_item(&self, id: u64) {
         if let Some(item) = self.layout.items.iter().find(|i| i.id == id) {
@@ -1861,6 +2129,17 @@ impl App {
         }
     }
     unsafe fn paint_group(&mut self, id: u64) {
+        let Some(window) = self.windows.get(&id) else {
+            return;
+        };
+        let hwnd = window.hwnd;
+        let mut ps: PAINTSTRUCT = zeroed();
+        let output = BeginPaint(hwnd, &mut ps);
+        self.render_group(id, output);
+        EndPaint(hwnd, &ps);
+    }
+    unsafe fn render_group(&mut self, id: u64, output: HDC) {
+        GROUP_PAINTS.fetch_add(1, Ordering::Relaxed);
         let Some(window) = self.windows.get_mut(&id) else {
             return;
         };
@@ -1869,11 +2148,9 @@ impl App {
         let Some(group) = self.layout.groups.iter().find(|g| g.id == id) else {
             return;
         };
-        let mut ps: PAINTSTRUCT = zeroed();
-        let output = BeginPaint(hwnd, &mut ps);
         let mut r = RECT::default();
         GetClientRect(hwnd, &mut r);
-        let dpi = GetDpiForWindow(hwnd).max(96);
+        let dpi = window_dpi(hwnd).max(96);
         let dc = CreateCompatibleDC(output);
         let bitmap = CreateCompatibleBitmap(output, r.right.max(1), r.bottom.max(1));
         let old_bitmap = SelectObject(dc, bitmap);
@@ -1900,33 +2177,50 @@ impl App {
         let height = unscale(r.bottom, dpi);
         let cols = ((width - 24) / 100).max(1);
         let rows = (group.items.len() as i32 + cols - 1) / cols;
-        window.scroll = window.scroll.clamp(0, (rows * 92 - (height - 48)).max(0));
-        let top = RECT {
-            left: 0,
-            top: 0,
-            right: r.right,
-            bottom: scale(32, dpi),
-        };
-        fill(dc, top, self.layout.settings.accent);
-        draw(
+        window.scroll = window.scroll.clamp(0, (rows * 110 - (height - 86)).max(0));
+        theme::heading(
             dc,
-            "Drop files here · double-click title to fold",
+            &group.name,
             RECT {
-                left: scale(10, dpi),
-                top: scale(7, dpi),
-                right: r.right - scale(4, dpi),
-                bottom: scale(30, dpi),
+                left: scale(16, dpi),
+                top: scale(14, dpi),
+                right: r.right - scale(16, dpi),
+                bottom: scale(44, dpi),
             },
-            0x001a1510,
-            DT_SINGLELINE | DT_END_ELLIPSIS,
+            20,
+            theme::rgb(242, 246, 252),
+            true,
+            dpi,
         );
-        if group.items.is_empty() {
+        if !group.collapsed {
+            draw(
+                dc,
+                &format!(
+                    "{} {}  ·  Drag to rearrange",
+                    group.items.len(),
+                    if group.items.len() == 1 {
+                        "file"
+                    } else {
+                        "files"
+                    }
+                ),
+                RECT {
+                    left: scale(16, dpi),
+                    top: scale(47, dpi),
+                    right: r.right - scale(12, dpi),
+                    bottom: scale(70, dpi),
+                },
+                theme::rgb(154, 172, 195),
+                DT_SINGLELINE | DT_END_ELLIPSIS,
+            );
+        }
+        if group.items.is_empty() && !group.collapsed {
             draw(
                 dc,
                 "Your files stay where they are.\nDrop files to add visual references.",
                 RECT {
                     left: scale(20, dpi),
-                    top: scale(65, dpi),
+                    top: scale(90, dpi),
                     right: r.right - scale(20, dpi),
                     bottom: r.bottom,
                 },
@@ -1935,61 +2229,68 @@ impl App {
             );
         }
         for (index, item_id) in group.items.iter().enumerate() {
+            if group.collapsed {
+                break;
+            }
             let Some(item) = self.layout.items.iter().find(|i| i.id == *item_id) else {
                 continue;
             };
             let x = 12 + index as i32 % cols * 100;
-            let y = 42 + index as i32 / cols * 92 - window.scroll;
-            if y + 86 < 32 || y > height {
+            let y = 80 + index as i32 / cols * 110 - window.scroll;
+            if y + 102 < 80 || y > height {
                 continue;
             }
             let tile = RECT {
                 left: scale(x, dpi),
                 top: scale(y, dpi),
                 right: scale(x + 92, dpi),
-                bottom: scale(y + 86, dpi),
+                bottom: scale(y + 102, dpi),
             };
             // Clip tiles below the fixed instruction strip, including while scrolling.
             SaveDC(dc);
-            IntersectClipRect(dc, 0, scale(32, dpi), r.right, r.bottom);
-            fill(
+            IntersectClipRect(dc, 0, scale(80, dpi), r.right, r.bottom);
+            theme::rounded(
                 dc,
                 tile,
                 if selected == Some(*item_id) {
                     0x00604c30
                 } else {
-                    0x00372c21
+                    theme::rgb(34, 46, 62)
                 },
+                theme::rgb(45, 60, 79),
+                scale(10, dpi),
             );
-            let badge = if item.kind == "folder" {
-                "DIR".to_string()
-            } else if item.extension.is_empty() {
-                "FILE".into()
-            } else {
-                item.extension
-                    .chars()
-                    .take(4)
-                    .collect::<String>()
-                    .to_uppercase()
+            let paper = RECT {
+                left: tile.left + scale(32, dpi),
+                top: tile.top + scale(12, dpi),
+                right: tile.left + scale(60, dpi),
+                bottom: tile.top + scale(45, dpi),
             };
-            draw(
+            theme::rounded(
                 dc,
-                &badge,
-                RECT {
-                    left: tile.left,
-                    top: tile.top + scale(8, dpi),
-                    right: tile.right,
-                    bottom: tile.top + scale(32, dpi),
-                },
-                self.layout.settings.accent,
-                DT_CENTER | DT_SINGLELINE,
+                paper,
+                theme::rgb(219, 232, 250),
+                theme::rgb(219, 232, 250),
+                scale(4, dpi),
             );
+            for line in 0..3 {
+                fill(
+                    dc,
+                    RECT {
+                        left: paper.left + scale(6, dpi),
+                        top: paper.top + scale(9 + line * 6, dpi),
+                        right: paper.right - scale(6, dpi),
+                        bottom: paper.top + scale(11 + line * 6, dpi),
+                    },
+                    self.layout.settings.accent,
+                );
+            }
             draw(
                 dc,
                 &item.name,
                 RECT {
                     left: tile.left + scale(4, dpi),
-                    top: tile.top + scale(37, dpi),
+                    top: tile.top + scale(54, dpi),
                     right: tile.right - scale(4, dpi),
                     bottom: tile.bottom - scale(3, dpi),
                 },
@@ -2004,8 +2305,19 @@ impl App {
         SelectObject(dc, old_bitmap);
         DeleteObject(bitmap);
         DeleteDC(dc);
-        EndPaint(hwnd, &ps);
     }
+}
+fn group_item_index(x: i32, y: i32, width: i32, scroll: i32) -> Option<usize> {
+    if y < 80 {
+        return None;
+    }
+    let cols = ((width - 24) / 100).max(1);
+    let x = x - 12;
+    let y = y - 80 + scroll;
+    if x < 0 || y < 0 || x >= cols * 100 || x % 100 >= 92 || y % 110 >= 102 {
+        return None;
+    }
+    Some((y / 110 * cols + x / 100) as usize)
 }
 unsafe fn fill(dc: HDC, rect: RECT, color: u32) {
     let brush = CreateSolidBrush(color);
@@ -2089,4 +2401,19 @@ unsafe fn place(hwnd: HWND, placement: &Placement, collapsed: bool) {
         SWP_NOZORDER | SWP_NOACTIVATE,
     );
     InvalidateRect(hwnd, null(), 0);
+}
+
+#[cfg(test)]
+mod geometry_tests {
+    use super::*;
+    #[test]
+    fn group_pointer_mapping_matches_rows_gaps_header_and_scroll() {
+        assert_eq!(group_item_index(20, 90, 360, 0), Some(0));
+        assert_eq!(group_item_index(220, 200, 360, 0), Some(5));
+        assert_eq!(group_item_index(20, 90, 360, 110), Some(3));
+        assert_eq!(group_item_index(220, 50, 360, 110), None);
+        assert_eq!(group_item_index(106, 90, 360, 0), None);
+        assert_eq!(group_item_index(20, 184, 360, 0), None);
+        assert_eq!(group_item_index(220, 200, 240, 0), None);
+    }
 }
