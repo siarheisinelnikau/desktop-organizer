@@ -9,6 +9,27 @@ const BG: u32 = rgb(245, 247, 251);
 const INK: u32 = rgb(31, 44, 63);
 const MUTED: u32 = rgb(106, 119, 138);
 const BLUE: u32 = rgb(53, 105, 224);
+pub(super) unsafe fn application_icon(instance: HINSTANCE) -> Result<HICON> {
+    unsafe {
+        let mut pixels = vec![0u8; 32 * 32 * 4];
+        let mask = [0u8; 32 * 4];
+        for y in 0..32 {
+            for x in 0..32 {
+                let tile = ((6..14).contains(&x) || (18..26).contains(&x))
+                    && ((6..14).contains(&y) || (18..26).contains(&y));
+                let color = if tile {
+                    [255, 255, 255, 255]
+                } else {
+                    [224, 105, 53, 255]
+                };
+                pixels[(y * 32 + x) * 4..(y * 32 + x + 1) * 4].copy_from_slice(&color);
+            }
+        }
+        let icon = CreateIcon(instance, 32, 32, 1, 32, mask.as_ptr(), pixels.as_ptr());
+        ensure!(!icon.is_null(), "Cannot create application icon");
+        Ok(icon)
+    }
+}
 
 pub(super) unsafe fn draw_button(item: *const DRAWITEMSTRUCT) -> LRESULT {
     unsafe {
@@ -391,15 +412,11 @@ impl App {
                 NAV,
             );
             rounded(dc, rect(20, 26, 36, 36), BLUE, BLUE, 10);
-            heading(
-                dc,
-                "D",
-                rect(29, 29, 26, 30),
-                22,
-                rgb(255, 255, 255),
-                true,
-                dpi,
-            );
+            for x in [28, 42] {
+                for y in [34, 48] {
+                    fill(dc, rect(x, y, 8, 8), rgb(255, 255, 255));
+                }
+            }
             heading(
                 dc,
                 "DesktopOrganizer",

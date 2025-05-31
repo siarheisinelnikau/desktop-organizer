@@ -127,6 +127,7 @@ struct App {
     windows: HashMap<u64, GroupWindow>,
     page: u8,
     font: HFONT,
+    icon: HICON,
     task: u8,
     scope: Vec<Item>,
     plan: Option<Plan>,
@@ -244,6 +245,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
     };
     layout.validate()?;
     let instance = GetModuleHandleW(null());
+    let icon = theme::application_icon(instance)?;
     for (class, proc) in [
         (
             MAIN_CLASS,
@@ -260,8 +262,8 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
             lpfnWndProc: proc,
             hInstance: instance,
             hCursor: LoadCursorW(null_mut(), IDC_ARROW),
-            hIcon: LoadIconW(null_mut(), IDI_APPLICATION),
-            hIconSm: LoadIconW(null_mut(), IDI_APPLICATION),
+            hIcon: icon,
+            hIconSm: icon,
             hbrBackground: (COLOR_WINDOW + 1) as HBRUSH,
             lpszClassName: class,
             ..zeroed()
@@ -296,6 +298,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         windows: HashMap::new(),
         page: 1,
         font: null_mut(),
+        icon,
         task: 0,
         scope: vec![],
         plan: None,
@@ -375,6 +378,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
                 if !app.font.is_null() {
                     DeleteObject(app.font);
                 }
+                DestroyIcon(app.icon);
             }
         });
         DestroyWindow(hwnd);
@@ -422,6 +426,10 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
             if !app.font.is_null() {
                 DeleteObject(app.font);
             }
+            for window in app.windows.values() {
+                DestroyWindow(window.hwnd);
+            }
+            DestroyIcon(app.icon);
         }
     });
     CoUninitialize();
@@ -1901,7 +1909,7 @@ impl App {
         icon.uID = 1;
         icon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
         icon.uCallbackMessage = TRAY;
-        icon.hIcon = LoadIconW(null_mut(), IDI_APPLICATION);
+        icon.hIcon = self.icon;
         let tip = wide("DesktopOrganizer — Click for settings");
         icon.szTip[..tip.len()].copy_from_slice(&tip);
         ensure!(
