@@ -1,0 +1,16 @@
+{
+  "backend": "CPU GDI / native controls",
+  "dpi": 96,
+  "elapsed_ms": 4,
+  "group_rasters": 1,
+  "layouts": 1,
+  "main_rasters": 0,
+  "network_requests": 0,
+  "pixels": [
+    360,
+    300
+  ],
+  "scenario": "populated",
+  "scope": "client area, production Win32 controls and shared GDI renderer",
+  "screen": "group"
+}

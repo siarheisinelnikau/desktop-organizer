@@ -1,48 +1,66 @@
-# Verification record and deferred checks
+# Verification record
 
-## Authorized automated checks
+## Current scope
 
-All commands run only in `E:/work/github/desktop-organizer`, with a repository-local Cargo target and at most two build jobs. Dependency resolution succeeded offline from the existing cache. Tests create temporary fixtures only under `.test-output/` in this repository, then clean up their own temporary directories. No real Desktop, user documents, GUI, updater process, live AI endpoint, device or Windows setting was operated.
+Work stays in `E:/work/github/desktop-organizer`, with two Cargo jobs and a local target. Fixtures contain synthetic files only. No real Desktop items were moved, no AI provider was called, and no updater/install helper or remote Git operation was executed. After the user requested no computer use, visual review used only bounded application self-capture and native in-process diagnostics.
 
-The final validation commands are:
+## Automated checks
+
+Rust/Cargo 1.96.1: formatting, Clippy with warnings denied, **18 library tests**, optimized Windows x64 compilation and packaging passed. Tests cover grouping/selected-item preservation, metadata serialization privacy, malformed/unknown/duplicate model output, URL restrictions, DPAPI on a synthetic token, release selection, root/name validation, no-overwrite moves, changed content, collision/undo/recovery, atomic persistence, capture argument isolation and group tile hit testing.
+
+The executable is inspected without execution by `scripts/inspect_binary.py`: x64, Windows GUI subsystem, embedded `asInvoker` / `PerMonitorV2` / Common Controls v6 manifest, and no dynamic MSVC/UCRT dependency. The packaged checksum is in `dist/SHA256SUMS`.
 
 ```powershell
 ./scripts/check.ps1
 ./scripts/package.ps1
 python scripts/inspect_binary.py dist/DesktopOrganizer-v0.1.0.exe
+./scripts/capture.ps1
 git diff --check
 ```
 
-The check script runs formatting, Clippy with warnings denied, library fixture tests and an optimized Windows x64 build. Test cases cover deterministic grouping and selected-item preservation, strict malformed/unknown/duplicate/incomplete AI output, URL/privacy serialization restrictions, DPAPI protection of an artificial token and invalid-blob refusal, semantic release ordering/asset provenance, invalid path/name rejection, preview collisions, late collisions with partial-operation undo, changed source/destination content, undo conflicts, interrupted-rename recovery, state replacement/corruption, and checksum-gated executable replacement using artificial bytes. It does not call the provider or GitHub API.
+## Actual visual evidence
 
-Final result on 2026-10-31: formatting, Clippy, all **16 library tests**, optimized Windows x64 compilation and packaging passed using Rust/Cargo 1.96.1. Static PE inspection confirmed x64, the Windows GUI subsystem, an embedded `asInvoker` / `PerMonitorV2` / Common Controls v6 manifest, and no dynamic MSVC/UCRT dependency. The EXE imports standard Windows system libraries. This inspection reads bytes only and does not establish that the UI is visually correct. The exact packaged checksum is in `dist/SHA256SUMS`; the build output is deliberately ignored by Git and can be reproduced with the packaging script.
+The four PNGs in `docs/screenshots/` are production Win32 controls plus the shared CPU GDI renderer. They show populated library, editable group preview, settings and a document group, at 100% scale. They are client-area captures, excluding OS title bars/menus and the physical taskbar. Each process saved its PNG and capture metadata, exited with code 0, made no startup network request, and did not load or save normal user settings.
 
-## Environment limitations observed
+Additional local captures reviewed empty/error states and a long filename at 125% scale. Fields/actions stayed accessible; a long row uses horizontal scrolling rather than shrinking text. These are deliberate developer scenarios, not claims that the UI was driven by real input. The empty state now explains the next action; unavailable operations are disabled; optional filesystem controls are hidden until selected. The source uses the same tile geometry for painting and pointer hit testing.
 
-- Atomic fixture renames in the external system Temp were denied in this sandbox. The same tests run successfully in repository-local fixtures; no elevation was requested.
-- Cargo's automatic `clippy --fix` lock server could not bind/connect to its local socket (`os error 10013`). Fixes were made manually; ordinary Clippy is available.
-- Incremental cache hard-link warnings can occur on this workspace filesystem; Cargo falls back to copying. They do not establish runtime performance.
-- No live AI models/API, update downloads or GUI launches are part of these checks. External release availability is not probed during tests.
+## Rendering/load gate evidence
 
-## Mandatory first interactive validation
+Source/configuration review: native Win32 controls and GDI CPU drawing, no wgpu/OpenGL/DirectX renderer. Normal dispatch sleeps in GetMessage. Save debounce is one-shot. Workers block in bounded queues; network and file work use separate workers. Paint does not self-invalidate. Hidden/minimized WM_PAINT validates its region without building/rasterizing a scene. Capture mode explicitly renders a finite offscreen frame and exits.
 
-Use a disposable folder of copied synthetic files, never the real Desktop for destructive tests. Keep backup copies of the layout and journal. The following checks remain unverified:
+Final bounded diagnostic: optimized `target/release/DesktopOrganizer.exe`, PID **21648**, six synthetic files, one second of settling followed by five seconds of sampling per state. This native diagnostic used no mouse/keyboard injection or computer-use API. See `diagnostics/runtime.json` for the original report.
 
-- Application and Settings screenshots showing the actual final executable, with English alt text/captions added to the README.
-- Native layout, keyboard/tab navigation, text wrapping, scrolling and dark group colors at 100%, 125%, 150%, 200% DPI; access to every settings action on a small display using scrollbars.
-- Real Explorer drops of file/folder/shortcut references, tile dragging between windows, large-group scrolling, Enter/double-click launching a harmless fixture and Delete removing references only.
-- Rename, resize, collapse/expand, appearance changes and exact persistence after normal Save and quit/relaunch.
-- A monitor left of the primary (negative coordinates), differing DPI values, unplugging/reconnecting a monitor, resolution changes and recovery of offscreen groups.
-- Show Desktop/Win+D cycles and explicit tray Show groups, fullscreen enter/exit including F11 without a focus change, lock/unlock, virtual desktops and focus/z-order interactions with other apps. Groups are not wallpaper children and may be minimized by Windows.
-- Tray click, tray Open, closing settings, repeated hide/restore, launch a second copy from hidden/minimized, and Quit while hidden. Confirm actual HWND visibility, focus, one process and process exit.
-- Explorer restart: the existing groups survive and the tray icon returns, with no duplicate processes or orphan windows.
-- Nonintrusive startup checks and the persistent opt-out: disabled means no startup request; manual checking still works. Check 404/unpublished, rate limit, offline, malformed response and available-update UI states with an isolated controlled test setup.
-- Provider compatibility with a user-supplied token, including local ai-hub `http://localhost:8080/v1`, model `universal`; observe exactly the selected metadata and no path/content sharing. Verify malformed/provider-error handling and DPAPI across sessions/accounts. Do not record tokens.
-- End-to-end portable updater on two controlled versions: progress, cancellation by closing the app only after completion, invalid/truncated digest, read-only installation, disk-full, antivirus/file locks, wait timeout, restart and retained settings. Verify backup/incoming/stage recovery and no incomplete installed binary.
-- Reparse/junction/symlink attacks and source/destination races against disposable fixtures; ACL-denied files, cloud placeholders, busy files and non-NTFS filesystems. Narrow unit tests verify the regular-file rename path but do not establish all Windows filesystem semantics.
-- Measure release-binary CPU/thread waits while visible idle, tray-hidden idle, scrolling and dragging; record frame/input latency with representative fixture counts. Neither GDI nor a sleeping event loop alone proves perceptual smoothness.
-- Windows logoff/shutdown or forced termination during the 450 ms save debounce can lose the latest unsaved visual change; explicit Save and quit waits for persistence. Exercise interrupted file operations and resolve ambiguous journals conservatively.
+| State | Sample | CPU seconds | One-core CPU | Main/group rasters | Layouts / owner draws |
+| --- | --- | --- | --- | --- | --- |
+| Visible settled | 5.012 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
+| Hidden settled | 5.002 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
+| Restored settled | 5.006 s | 0.09375 | 1.87% (0.094% machine-wide) | 0 / 0 | 0 / 0 |
 
-## Publication gate
+No sustained scene generation occurred in these settled windows. The native system-close path preserved the actual HWND and hid settings to tray; the production restore dispatcher made the window visible again. Tray registration succeeded outside the sandbox. The process exited normally after the bounded run. The earlier sandbox diagnostic could not register a tray icon, but kept settings accessible as designed.
 
-No remote Git operation or publication was authorized. Before a future release, complete the interactive checks, capture both required screenshots, confirm canonical repository ownership and version/asset digest, review dependency notices and produce accurate release notes. Use the connected GitHub plugin for any separately authorized remote action.
+This passes the narrow native idle/hidden/restore check. It does **not** establish pointer/scroll latency, physical tray clicks, focus behavior during a real user action, all native-control internals, GPU/compositor timing or universal absence of stutter. GPU telemetry was not collected. Do not infer interaction performance from the PNGs or CPU sample.
+
+## Repairs verified at the appropriate level
+
+- DefWindowProc now runs after releasing App state, allowing synchronous system-close/resize reentry to reach custom handlers. The SC_CLOSE-to-WM_CLOSE close/restore path was checked by the bounded native diagnostic.
+- Tray registration is deferred until the dispatcher is ready. Failure keeps settings available and prevents an inaccessible hide; TaskbarCreated can retry.
+- Show groups raises non-topmost group windows. Fullscreen detection includes transitions back into this process.
+- Collapsed groups no longer rasterize clipped file tiles. Group header/tile layout shares the tested hit-test grid.
+- The consumer preview uses names and direct reassignment instead of JSON/IDs. Disabled, empty and error presentation was reviewed from actual component captures.
+
+## Remaining interactive/hardware checks
+
+Do not use the real Desktop for destructive checks. The following remain separate from the static/native evidence above:
+
+- Physical tray click/menu, repeated user-driven hide/restore and duplicate launch, keyboard/tab/screen-reader traversal, resize gestures, collapse gestures, appearance controls and actual focus/z-order behavior.
+- Explorer drops, cross-window tile dragging, large-group scrolling, item launching and reference removal through real input.
+- Mixed DPI/negative-coordinate monitors, unplug/reconnect, virtual desktops, Show Desktop, fullscreen/F11 transitions, lock/unlock and Explorer restart.
+- Live AI-provider compatibility with user-supplied credentials, runtime startup-update opt-out/network observation, and end-to-end update download/install/restart on controlled releases.
+- Junction/symlink races, cloud placeholders, ACL/file-lock edge cases and non-NTFS behavior beyond the synthetic regular-file tests.
+- Input/presentation latency and compositor/GPU evidence with a representative workload. Windows shutdown/forced termination during the 450 ms debounce can still lose the latest unsaved visual change; normal Quit waits for persistence.
+
+## Environment notes
+
+External system Temp atomic renames were denied during the original code-only pass, so fixtures use repository-local directories. Clippy automatic-fix socket creation was denied; ordinary Clippy and manual fixes work. Cargo occasionally warns that its incremental hard links fall back to copying. No escalation, driver/settings changes or unrelated-process termination was used to work around these build limitations.
+
+No repository/release publication was authorized. Complete the remaining interactive checks and review version, checksum, dependencies and release notes before any separately authorized publication through the GitHub plugin.

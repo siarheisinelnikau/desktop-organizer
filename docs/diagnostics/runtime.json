@@ -1,0 +1,48 @@
+{
+  "backend": "CPU GDI / native Win32 controls; no GPU renderer",
+  "executable": "E:\\work\\github\\desktop-organizer\\target\\release\\DesktopOrganizer.exe",
+  "fixture_items": 6,
+  "gpu_telemetry": "not collected; compositor/driver timing is not certified",
+  "pid": 21648,
+  "profile": "release",
+  "restore_visible": true,
+  "samples": [
+    {
+      "cpu_machine_percent": 0.0,
+      "cpu_one_core_percent": 0.0,
+      "cpu_seconds": 0.0,
+      "group_rasters": 0,
+      "layouts": 0,
+      "main_rasters": 0,
+      "owner_draws": 0,
+      "seconds": 5.0119333,
+      "state": "visible settled"
+    },
+    {
+      "cpu_machine_percent": 0.0,
+      "cpu_one_core_percent": 0.0,
+      "cpu_seconds": 0.0,
+      "group_rasters": 0,
+      "layouts": 0,
+      "main_rasters": 0,
+      "owner_draws": 0,
+      "seconds": 5.0024006,
+      "state": "hidden settled"
+    },
+    {
+      "cpu_machine_percent": 0.0936389704000173,
+      "cpu_one_core_percent": 1.872779408000346,
+      "cpu_seconds": 0.09375,
+      "group_rasters": 0,
+      "layouts": 0,
+      "main_rasters": 0,
+      "owner_draws": 0,
+      "seconds": 5.0059286,
+      "state": "restored settled"
+    }
+  ],
+  "scope": "isolated in-process integration and idle load; physical tray clicks and keyboard traversal not tested",
+  "system_close_hid_to_tray": true,
+  "system_close_preserved_window": true,
+  "tray_registered": true
+}
