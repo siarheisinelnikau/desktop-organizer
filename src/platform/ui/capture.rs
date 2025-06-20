@@ -66,7 +66,8 @@ impl Options {
             "Unknown capture screen"
         );
         ensure!(
-            ["empty", "populated", "error", "long-names"].contains(&result.scenario.as_str()),
+            ["empty", "populated", "error", "long-names", "ai-setup"]
+                .contains(&result.scenario.as_str()),
             "Unknown capture scenario"
         );
         ensure!(
@@ -191,10 +192,7 @@ pub(super) unsafe fn save(options: &Options, main: HWND) -> Result<()> {
                     .unwrap()
                     .controls
                     .iter()
-                    .filter(|c| {
-                        (c.page == 0 || c.page == options.page())
-                            && GetWindowLongPtrW(c.hwnd, GWL_STYLE) as u32 & WS_VISIBLE != 0
-                    })
+                    .filter(|c| GetWindowLongPtrW(c.hwnd, GWL_STYLE) as u32 & WS_VISIBLE != 0)
                     .map(|c| c.hwnd)
                     .collect()
             });

@@ -43,6 +43,12 @@ const PROPOSALS: u16 = 180;
 const PROPOSAL_NAME: u16 = 181;
 const RENAME_PROPOSAL: u16 = 182;
 const ASSIGN_PROPOSAL: u16 = 183;
+const AI_SETUP: u16 = 184;
+const FOLDER_NAME: u16 = 185;
+const OPACITY_SLIDER: u16 = 186;
+const OPACITY_VALUE: u16 = 187;
+// TBM_GETPOS is WM_USER + 0; the pinned metadata omits this alias.
+const TBM_GETPOS: u32 = WM_USER;
 
 const MAIN_CLASS: PCWSTR = w!("DesktopOrganizer.Settings.v1");
 const GROUP_CLASS: PCWSTR = w!("DesktopOrganizer.Group.v1");
@@ -107,6 +113,7 @@ struct Control {
     id: u16,
     page: u8,
     rect: (i32, i32, i32, i32),
+    placed: Option<(i32, i32, i32, i32)>,
 }
 struct GroupWindow {
     hwnd: HWND,
@@ -127,6 +134,7 @@ struct App {
     windows: HashMap<u64, GroupWindow>,
     page: u8,
     font: HFONT,
+    font_dpi: u32,
     icon: HICON,
     task: u8,
     scope: Vec<Item>,
@@ -144,12 +152,15 @@ struct App {
     tray_message: u32,
     tray_available: bool,
     hooks: Vec<HWINEVENTHOOK>,
+    ai_setup_open: bool,
 }
 static CAPTURE_DPI: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 static MAIN_PAINTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static GROUP_PAINTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static LAYOUTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static OWNER_DRAWS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static FONT_CREATIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static PAGE_SWITCHES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 fn window_dpi(hwnd: HWND) -> u32 {
     let override_dpi = CAPTURE_DPI.load(Ordering::Relaxed);
     if override_dpi > 0 {
@@ -274,8 +285,13 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         );
     }
     CoInitializeEx(null(), COINIT_APARTMENTTHREADED as _);
+    let common = INITCOMMONCONTROLSEX {
+        dwSize: size_of::<INITCOMMONCONTROLSEX>() as _,
+        dwICC: ICC_BAR_CLASSES,
+    };
+    InitCommonControlsEx(&common);
     let hwnd = CreateWindowExW(
-        0,
+        WS_EX_COMPOSITED,
         MAIN_CLASS,
         w!("DesktopOrganizer — Library and settings"),
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_HSCROLL | WS_VSCROLL,
@@ -298,6 +314,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         windows: HashMap::new(),
         page: 1,
         font: null_mut(),
+        font_dpi: 0,
         icon,
         task: 0,
         scope: vec![],
@@ -315,6 +332,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         tray_message: RegisterWindowMessageW(w!("TaskbarCreated")),
         tray_available: false,
         hooks: vec![],
+        ai_setup_open: false,
     };
     APP.with(|cell| {
         *cell.borrow_mut() = Some(app);
@@ -330,12 +348,16 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         app.rebuild_groups()?;
         if let Some(options) = &diagnostic {
             app.page = options.page();
+            app.ai_setup_open = options.scenario == "ai-setup";
+            if app.ai_setup_open {
+                app.set(AI_SETUP, "Done");
+            }
             app.position_controls();
             app.scope = app.layout.items.clone();
             if !app.scope.is_empty() {
                 app.set_suggestions(grouping::offline(&app.scope))?;
             }
-            app.status("Everything here is a reference. Your original files stay in place.");
+            app.status("Files stay in place.");
             if options.scenario == "error" {
                 app.status(
                     "Folder unavailable. Choose another folder to keep organizing your files.",
@@ -470,7 +492,14 @@ unsafe extern "system" fn foreground_event(
 }
 unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     if msg == WM_DRAWITEM {
-        return theme::draw_button(lp as *const DRAWITEMSTRUCT);
+        return theme::draw_control(lp as *const DRAWITEMSTRUCT);
+    }
+    if msg == WM_MEASUREITEM {
+        let item = &mut *(lp as *mut MEASUREITEMSTRUCT);
+        if item.CtlType == ODT_LISTBOX {
+            item.itemHeight = scale(48, window_dpi(hwnd)) as _;
+            return 1;
+        }
     }
     if msg == WM_CTLCOLORSTATIC {
         SetBkMode(wp as HDC, TRANSPARENT as _);
@@ -505,6 +534,7 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
             WM_PRINTCLIENT => { app.render_main(wp as HDC); 0 },
             WM_ERASEBKGND => 1,
             WM_GETMINMAXINFO => { let info = &mut *(lp as *mut MINMAXINFO); info.ptMinTrackSize = POINT { x: scale(640, window_dpi(hwnd)), y: scale(420, window_dpi(hwnd)) }; 0 },
+            WM_HSCROLL if lp==app.c(OPACITY_SLIDER)as isize => {let value=SendMessageW(app.c(OPACITY_SLIDER),TBM_GETPOS,0,0);app.set(OPACITY_VALUE,&format!("{value}%"));0},
             WM_VSCROLL | WM_HSCROLL => { app.scroll_main(msg,wp); 0 },
             WM_MOUSEWHEEL => { let delta=((wp>>16) as u16 as i16) as i32; app.main_scroll.y=(app.main_scroll.y-scale(delta,window_dpi(hwnd))).max(0); app.position_controls(); 0 },
             WM_DPICHANGED => { let r = &*(lp as *const RECT); SetWindowPos(hwnd, null_mut(), r.left, r.top, r.right-r.left, r.bottom-r.top, SWP_NOZORDER | SWP_NOACTIVATE); app.position_controls(); 0 },
@@ -738,16 +768,18 @@ impl App {
         style: u32,
         rect: (i32, i32, i32, i32),
     ) {
+        let is_list = matches!(id, GROUPS | ITEMS | AI_ITEMS | PROPOSALS);
+        let style = if is_list {
+            (style & !WS_HSCROLL) | LBS_OWNERDRAWFIXED as u32 | LBS_HASSTRINGS as u32
+        } else {
+            style
+        };
         let is_edit = matches!(
             id,
             ROOT | GROUP_NAME | JSON | MOVES | BASE | MODEL | KEY | OPACITY
         );
         let hwnd = CreateWindowExW(
-            if is_edit || matches!(id, GROUPS | ITEMS | AI_ITEMS) {
-                WS_EX_CLIENTEDGE
-            } else {
-                0
-            },
+            if is_edit { WS_EX_CLIENTEDGE } else { 0 },
             class,
             wide(text).as_ptr(),
             WS_CHILD | if id == 0 { 0 } else { WS_TABSTOP } | style,
@@ -765,6 +797,7 @@ impl App {
             id,
             page,
             rect,
+            placed: None,
         });
         if is_edit {
             SendMessageW(
@@ -989,6 +1022,23 @@ impl App {
     unsafe fn set(&self, id: u16, text: &str) {
         let text = text.replace("\r\n", "\n").replace('\n', "\r\n");
         SetWindowTextW(self.c(id), wide(text).as_ptr());
+        if id == ROOT {
+            self.sync_folder_name();
+        }
+    }
+    unsafe fn sync_folder_name(&self) {
+        let path = PathBuf::from(self.text(ROOT));
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| {
+                if path.as_os_str().is_empty() {
+                    "Choose your first folder".into()
+                } else {
+                    path.to_string_lossy().into_owned()
+                }
+            });
+        SetWindowTextW(self.c(FOLDER_NAME), wide(name).as_ptr());
     }
     unsafe fn checked(&self, id: u16) -> bool {
         SendMessageW(self.c(id), BM_GETCHECK, 0, 0) == BST_CHECKED as isize
@@ -1007,6 +1057,13 @@ impl App {
         let dpi = window_dpi(self.hwnd).max(96);
         let mut client = RECT::default();
         GetClientRect(self.hwnd, &mut client);
+        if let Some(button) = self.controls.iter_mut().find(|c| c.id == AI_SETUP) {
+            button.rect = if self.ai_setup_open {
+                (772, 250, 188, 34)
+            } else {
+                (772, 326, 188, 38)
+            };
+        }
         for (bar, total, page, pos) in [
             (
                 SB_HORZ,
@@ -1034,56 +1091,117 @@ impl App {
             GetScrollInfo(self.hwnd, bar, &mut info);
             *pos = info.nPos;
         }
-        let font = CreateFontW(
-            -scale(15, dpi),
-            0,
-            0,
-            0,
-            FW_NORMAL as _,
-            0,
-            0,
-            0,
-            DEFAULT_CHARSET as _,
-            OUT_DEFAULT_PRECIS as _,
-            CLIP_DEFAULT_PRECIS as _,
-            CLEARTYPE_QUALITY as _,
-            DEFAULT_PITCH as _,
-            w!("Segoe UI"),
-        );
-        for control in &self.controls {
+        let font_changed = self.font.is_null() || self.font_dpi != dpi;
+        if font_changed {
+            let font = CreateFontW(
+                -scale(15, dpi),
+                0,
+                0,
+                0,
+                FW_NORMAL as _,
+                0,
+                0,
+                0,
+                DEFAULT_CHARSET as _,
+                OUT_DEFAULT_PRECIS as _,
+                CLIP_DEFAULT_PRECIS as _,
+                CLEARTYPE_QUALITY as _,
+                DEFAULT_PITCH as _,
+                w!("Segoe UI"),
+            );
+            if !font.is_null() {
+                FONT_CREATIONS.fetch_add(1, Ordering::Relaxed);
+                for control in &self.controls {
+                    SendMessageW(control.hwnd, WM_SETFONT, font as usize, 0);
+                }
+                if !self.font.is_null() {
+                    DeleteObject(self.font);
+                }
+                self.font = font;
+                self.font_dpi = dpi;
+            }
+        }
+        let mut batch = BeginDeferWindowPos(self.controls.len() as i32);
+        for control in &mut self.controls {
             let (x, y, w, h) = control.rect;
-            SetWindowPos(
-                control.hwnd,
-                null_mut(),
+            let next = (
                 scale(x, dpi) - self.main_scroll.x,
                 scale(y, dpi) - self.main_scroll.y,
                 scale(w, dpi),
                 scale(h, dpi),
-                SWP_NOZORDER | SWP_NOACTIVATE,
             );
-            SendMessageW(control.hwnd, WM_SETFONT, font as usize, 1);
-            ShowWindow(
-                control.hwnd,
-                if control.page == 0 || control.page == self.page {
-                    SW_SHOW
+            if control.placed != Some(next) {
+                if !batch.is_null() {
+                    batch = DeferWindowPos(
+                        batch,
+                        control.hwnd,
+                        null_mut(),
+                        next.0,
+                        next.1,
+                        next.2,
+                        next.3,
+                        SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW,
+                    );
                 } else {
-                    SW_HIDE
-                },
-            );
+                    SetWindowPos(
+                        control.hwnd,
+                        null_mut(),
+                        next.0,
+                        next.1,
+                        next.2,
+                        next.3,
+                        SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW,
+                    );
+                }
+                control.placed = Some(next);
+            }
+            if matches!(control.id, GROUPS | ITEMS | AI_ITEMS | PROPOSALS) {
+                SendMessageW(control.hwnd, LB_SETITEMHEIGHT, 0, scale(48, dpi) as isize);
+            }
+        }
+        if !batch.is_null() {
+            EndDeferWindowPos(batch);
+        }
+        self.update_actions();
+        RedrawWindow(
+            self.hwnd,
+            null(),
+            null_mut(),
+            RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME,
+        );
+    }
+    unsafe fn switch_page(&mut self, page: u8) {
+        if self.page == page {
+            return;
+        }
+        let visible = IsWindowVisible(self.hwnd) != 0;
+        if visible {
+            SendMessageW(self.hwnd, WM_SETREDRAW, 0, 0);
+        }
+        self.page = page;
+        PAGE_SWITCHES.fetch_add(1, Ordering::Relaxed);
+        if page == 2 && SendMessageW(self.c(AI_ITEMS), LB_GETSELCOUNT, 0, 0) <= 0 {
+            SendMessageW(self.c(AI_ITEMS), LB_SETSEL, 1, -1);
+        }
+        self.update_actions();
+        for control in &self.controls {
             if matches!(control.id, PAGE_LIBRARY | PAGE_AI | PAGE_SETTINGS) {
                 SetWindowLongPtrW(
                     control.hwnd,
                     GWLP_USERDATA,
-                    (control.id - 100 == self.page as u16) as isize,
+                    (control.id - 100 == page as u16) as isize,
                 );
             }
         }
-        if !self.font.is_null() {
-            DeleteObject(self.font);
+        if visible {
+            SendMessageW(self.hwnd, WM_SETREDRAW, 1, 0);
         }
-        self.font = font;
-        self.update_actions();
-        InvalidateRect(self.hwnd, null(), 0);
+        RedrawWindow(
+            self.hwnd,
+            null(),
+            null_mut(),
+            RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME,
+        );
     }
     unsafe fn scroll_main(&mut self, message: u32, wp: WPARAM) {
         let bar = if message == WM_VSCROLL {
@@ -1162,7 +1280,10 @@ impl App {
         }
         for list_id in [ITEMS, AI_ITEMS] {
             let list = self.c(list_id);
-            SendMessageW(list, WM_SETREDRAW, 0, 0);
+            let was_visible = GetWindowLongPtrW(list, GWL_STYLE) as u32 & WS_VISIBLE != 0;
+            if was_visible {
+                SendMessageW(list, WM_SETREDRAW, 0, 0);
+            }
             SendMessageW(list, LB_RESETCONTENT, 0, 0);
             for item in &self.layout.items {
                 let group = self
@@ -1192,8 +1313,10 @@ impl App {
                 scale((longest * 8) as i32, window_dpi(self.hwnd)) as _,
                 0,
             );
-            SendMessageW(list, WM_SETREDRAW, 1, 0);
-            InvalidateRect(list, null(), 1);
+            if was_visible {
+                SendMessageW(list, WM_SETREDRAW, 1, 0);
+                InvalidateRect(list, null(), 0);
+            }
         }
         self.group_selection();
         self.update_actions();
@@ -1225,12 +1348,34 @@ impl App {
     unsafe fn command(&mut self, id: u16) -> Result<()> {
         trace(&format!("command {id}"));
         match id {
-            PAGE_LIBRARY | PAGE_AI | PAGE_SETTINGS => {
-                self.page = (id - 100) as u8;
-                if self.page == 2 && SendMessageW(self.c(AI_ITEMS), LB_GETSELCOUNT, 0, 0) <= 0 {
-                    SendMessageW(self.c(AI_ITEMS), LB_SETSEL, 1, -1);
+            AI_SETUP => {
+                let visible = IsWindowVisible(self.hwnd) != 0;
+                if visible {
+                    SendMessageW(self.hwnd, WM_SETREDRAW, 0, 0);
                 }
+                self.ai_setup_open = !self.ai_setup_open;
+                self.set(
+                    AI_SETUP,
+                    if self.ai_setup_open {
+                        "Done"
+                    } else {
+                        "Connect AI"
+                    },
+                );
                 self.position_controls();
+                if visible {
+                    SendMessageW(self.hwnd, WM_SETREDRAW, 1, 0);
+                }
+                RedrawWindow(
+                    self.hwnd,
+                    null(),
+                    null_mut(),
+                    RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME,
+                );
+                return Ok(());
+            }
+            PAGE_LIBRARY | PAGE_AI | PAGE_SETTINGS => {
+                self.switch_page((id - 100) as u8);
                 return Ok(());
             }
             SHOW_GROUPS | TRAY_SHOW => {
@@ -1280,6 +1425,8 @@ impl App {
                     if SHGetPathFromIDListEx(pidl, path.as_mut_ptr(), path.len() as _, 0) != 0 {
                         let n = path.iter().position(|c| *c == 0).unwrap_or(0);
                         self.set(ROOT, &String::from_utf16_lossy(&path[..n]));
+                        CoTaskMemFree(pidl.cast());
+                        return self.command(SCAN);
                     }
                     CoTaskMemFree(pidl.cast());
                 }
@@ -1485,11 +1632,14 @@ impl App {
                     !model.trim().is_empty() && model.len() < 256,
                     "Enter a model name"
                 );
-                let opacity = self
-                    .text(OPACITY)
-                    .parse::<u8>()
-                    .context("Opacity must be 150-255")?;
-                ensure!(opacity >= 150, "Opacity must be 150-255");
+                let percent = SendMessageW(self.c(OPACITY_SLIDER), TBM_GETPOS, 0, 0) as u32;
+                ensure!((60..=100).contains(&percent), "Opacity must be 60–100%");
+                let current_percent = (self.layout.settings.opacity as u32 * 100 + 127) / 255;
+                let opacity = if percent == current_percent {
+                    self.layout.settings.opacity
+                } else {
+                    ((percent * 255 + 50) / 100) as u8
+                };
                 let mut key = self.text(KEY).into_bytes();
                 if !key.is_empty() {
                     self.layout.settings.protected_api_key = super::secrets::protect(&key)?;
@@ -1538,13 +1688,12 @@ impl App {
     unsafe fn update_actions(&self) {
         let ready = self.task == 0 && self.quitting.is_none();
         let suggested = !self.text(JSON).is_empty();
-        ShowWindow(
+        for control in &self.controls {
+            set_control_visible(control.hwnd, self.control_visible(control));
+        }
+        set_control_visible(
             self.c(ITEMS),
-            if self.page == 1 && !self.layout.items.is_empty() {
-                SW_SHOW
-            } else {
-                SW_HIDE
-            },
+            self.page == 1 && !self.layout.items.is_empty(),
         );
         for (id, enabled) in [
             (
@@ -1570,27 +1719,38 @@ impl App {
             (APPLY_MOVES, ready && self.plan.is_some()),
             (SCAN, ready && !self.text(ROOT).trim().is_empty()),
         ] {
-            EnableWindow(self.c(id), enabled as _);
+            if (IsWindowEnabled(self.c(id)) != 0) != enabled {
+                EnableWindow(self.c(id), enabled as _);
+            }
         }
         for id in [PREVIEW_MOVES, APPLY_MOVES, MOVES] {
-            ShowWindow(
-                self.c(id),
-                if self.page == 2 && self.checked(MOVE_OPT) {
-                    SW_SHOW
-                } else {
-                    SW_HIDE
-                },
-            );
+            set_control_visible(self.c(id), self.page == 2 && self.checked(MOVE_OPT));
         }
         let has_journal = self.data.join("operation.json").exists();
-        ShowWindow(
+        set_control_visible(
             self.c(UNDO),
-            if self.page == 2 && (self.checked(MOVE_OPT) || has_journal) {
-                SW_SHOW
-            } else {
-                SW_HIDE
-            },
+            self.page == 2 && (self.checked(MOVE_OPT) || has_journal),
         );
+    }
+    fn control_visible(&self, control: &Control) -> bool {
+        if !(control.page == 0
+            || control.page == self.page
+            || (control.page == 4 && self.page == 3 && self.ai_setup_open))
+        {
+            return false;
+        }
+        match control.id {
+            ITEMS => self.page == 1 && !self.layout.items.is_empty(),
+            PREVIEW_MOVES | APPLY_MOVES | MOVES => {
+                self.page == 2 && unsafe { self.checked(MOVE_OPT) }
+            }
+            UNDO => {
+                self.page == 2
+                    && (unsafe { self.checked(MOVE_OPT) }
+                        || self.data.join("operation.json").exists())
+            }
+            _ => true,
+        }
     }
     unsafe fn remove_items(&mut self, ids: &[u64]) {
         self.layout.items.retain(|i| !ids.contains(&i.id));
@@ -1662,11 +1822,11 @@ impl App {
                 Event::Scanned(result) => {
                     self.task = 0;
                     let group = self.selected_group();
-                    self.import_result(group, result);
+                    self.import_result(group, result, true);
                 }
                 Event::Imported(group, result) => {
                     self.task = 0;
-                    self.import_result(group, result);
+                    self.import_result(group, result, false);
                 }
                 Event::Suggested(result) => {
                     self.task = 0;
@@ -1841,19 +2001,28 @@ impl App {
         self.invalidate_groups();
         self.changed();
     }
-    unsafe fn import_result(&mut self, group: u64, result: Result<Vec<(PathBuf, bool)>>) {
+    unsafe fn import_result(
+        &mut self,
+        group: u64,
+        result: Result<Vec<(PathBuf, bool)>>,
+        preserve_groups: bool,
+    ) {
         match result {
             Ok(entries) => {
                 let mut count = 0;
                 for (path, dir) in entries {
-                    if self.layout.import(path, dir, group) {
+                    if if preserve_groups {
+                        self.layout.refresh_reference(path, dir, group)
+                    } else {
+                        self.layout.import(path, dir, group)
+                    } {
                         count += 1;
                     }
                 }
                 self.refresh();
                 self.invalidate_groups();
                 self.changed();
-                self.status(&format!("Added {count} items. Originals stay in place."));
+                self.status(&format!("{count} items ready. Originals stay in place."));
             }
             Err(e) => self.error(e),
         }
@@ -2331,6 +2500,28 @@ unsafe fn fill(dc: HDC, rect: RECT, color: u32) {
     let brush = CreateSolidBrush(color);
     FillRect(dc, &rect, brush);
     DeleteObject(brush);
+}
+unsafe fn set_control_visible(hwnd: HWND, visible: bool) {
+    if (GetWindowLongPtrW(hwnd, GWL_STYLE) as u32 & WS_VISIBLE != 0) != visible {
+        SetWindowPos(
+            hwnd,
+            null_mut(),
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE
+                | SWP_NOSIZE
+                | SWP_NOZORDER
+                | SWP_NOACTIVATE
+                | SWP_NOREDRAW
+                | if visible {
+                    SWP_SHOWWINDOW
+                } else {
+                    SWP_HIDEWINDOW
+                },
+        );
+    }
 }
 unsafe fn draw(dc: HDC, text: &str, mut rect: RECT, color: u32, flags: u32) {
     SetTextColor(dc, color);

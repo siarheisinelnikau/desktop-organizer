@@ -197,6 +197,19 @@ impl Layout {
             }
         }
     }
+    pub fn refresh_reference(
+        &mut self,
+        path: PathBuf,
+        directory: bool,
+        fallback_group: u64,
+    ) -> bool {
+        if let Some(item) = self.items.iter_mut().find(|i| same_path(&i.path, &path)) {
+            *item = Item::from_path(item.id, path, directory);
+            true
+        } else {
+            self.import(path, directory, fallback_group)
+        }
+    }
     pub fn validate(&self) -> anyhow::Result<()> {
         use anyhow::ensure;
         use std::collections::HashSet;
@@ -264,5 +277,33 @@ pub fn same_path(a: &Path, b: &Path) -> bool {
     #[cfg(not(windows))]
     {
         a == b
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn refreshing_a_folder_keeps_manual_group_assignments() {
+        let root = std::env::current_dir().unwrap();
+        let mut layout = Layout::default();
+        let work = layout.add_group("Work").unwrap();
+        let path = root.join("notes.txt");
+        layout.import(path.clone(), false, work);
+        let id = layout.items[0].id;
+        assert!(layout.refresh_reference(path, false, 1));
+        assert!(
+            layout
+                .groups
+                .iter()
+                .find(|g| g.id == work)
+                .unwrap()
+                .items
+                .contains(&id)
+        );
+        assert!(layout.groups[0].items.is_empty());
+        layout.refresh_reference(root.join("new.txt"), false, 1);
+        assert_eq!(layout.groups[0].items.len(), 1);
+        layout.validate().unwrap();
     }
 }
