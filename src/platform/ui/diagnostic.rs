@@ -88,6 +88,36 @@ pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
         });
         ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         let visible = sample("visible settled")?;
+        let fonts_before = FONT_CREATIONS.load(Ordering::Relaxed);
+        let layouts_before = LAYOUTS.load(Ordering::Relaxed);
+        let mut max_dispatch_ms = 0f64;
+        let mut wrong_visibility = 0u64;
+        let mut paints_inside_dispatch = 0u64;
+        for _ in 0..10 {
+            for id in [PAGE_AI, PAGE_SETTINGS, PAGE_LIBRARY] {
+                let before = MAIN_PAINTS.load(Ordering::Relaxed);
+                let start = Instant::now();
+                SendMessageW(hwnd, WM_COMMAND, id as usize, 0);
+                max_dispatch_ms = max_dispatch_ms.max(start.elapsed().as_secs_f64() * 1000.0);
+                paints_inside_dispatch += MAIN_PAINTS.load(Ordering::Relaxed) - before;
+                pump(Duration::from_millis(20))?;
+                APP.with(|cell| {
+                    let mut borrow = cell.borrow_mut();
+                    let app = borrow.as_mut().unwrap();
+                    // Repopulating the library must not make another page's list visible.
+                    app.refresh();
+                    for control in &app.controls {
+                        if (GetWindowLongPtrW(control.hwnd, GWL_STYLE) as u32 & WS_VISIBLE != 0)
+                            != app.control_visible(control)
+                        {
+                            wrong_visibility += 1;
+                        }
+                    }
+                });
+            }
+        }
+        let transitions = serde_json::json!({"count":30,"fonts_created":FONT_CREATIONS.load(Ordering::Relaxed)-fonts_before,"layouts":LAYOUTS.load(Ordering::Relaxed)-layouts_before,"unexpected_visibility":wrong_visibility,"scene_paints_during_dispatch":paints_inside_dispatch,"max_dispatch_ms":max_dispatch_ms,"scope":"native dispatch and visibility; not a subjective flicker or presentation-latency measurement"});
+        let after_navigation = sample("after navigation settled")?;
         let tray_registered = APP.with(|cell| cell.borrow().as_ref().unwrap().tray_available);
         // Exercise the OS's SC_CLOSE -> WM_CLOSE reentry, not a test-only hide shortcut.
         SendMessageW(hwnd, WM_SYSCOMMAND, SC_CLOSE as usize, 0);
@@ -114,7 +144,7 @@ pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
         let report = serde_json::json!({"pid":std::process::id(),"executable":std::env::current_exe()?,"profile":"release",
         "backend":"CPU GDI / native Win32 controls; no GPU renderer","fixture_items":APP.with(|c|c.borrow().as_ref().unwrap().layout.items.len()),
         "tray_registered":tray_registered,"system_close_preserved_window":close_preserved_window,"system_close_hid_to_tray":close_hid_to_tray,
-        "restore_visible":restored_visible,"samples":[visible,hidden,restored],
+        "restore_visible":restored_visible,"navigation":transitions,"samples":[visible,after_navigation,hidden,restored],
         "gpu_telemetry":"not collected; compositor/driver timing is not certified",
         "scope":"isolated in-process integration and idle load; physical tray clicks and keyboard traversal not tested"});
         fs::create_dir_all(options.output.parent().context("Missing report parent")?)?;
@@ -122,6 +152,10 @@ pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
         ensure!(
             close_preserved_window && restored_visible,
             "Native close/restore regression"
+        );
+        ensure!(
+            wrong_visibility == 0 && FONT_CREATIONS.load(Ordering::Relaxed) == fonts_before,
+            "Navigation visibility or font recreation regression"
         );
         Ok(())
     }
