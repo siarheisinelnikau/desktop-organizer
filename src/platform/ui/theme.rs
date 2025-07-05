@@ -364,7 +364,7 @@ impl App {
                 (590, 352, 370, 36),
             );
             self.label(2, "Just a preview. You're in control.", (590, 396, 370, 22));
-            self.label(3, "Look & feel", (240, 116, 600, 26));
+            self.label(3, "Look and feel", (240, 116, 600, 26));
             self.label(3, "Group opacity", (240, 192, 290, 24));
             self.control(
                 OPACITY_SLIDER,
@@ -661,15 +661,6 @@ Your originals stay right where they are.",
                     dpi,
                 );
             }
-            let footer_icon = rect(236, 704, 18, 18);
-            draw_icon(
-                dc,
-                Glyph::Shield,
-                footer_icon.left,
-                footer_icon.top,
-                scale(18, dpi),
-                MUTED,
-            );
             for control in self.controls.iter().filter(|c| {
                 self.control_visible(c)
                     && matches!(
@@ -692,6 +683,15 @@ Your originals stay right where they are.",
                 rgb(255, 255, 255),
                 rgb(228, 233, 241),
                 12,
+            );
+            let footer_icon = rect(236, 704, 18, 18);
+            draw_icon(
+                dc,
+                Glyph::Shield,
+                footer_icon.left,
+                footer_icon.top,
+                scale(18, dpi),
+                MUTED,
             );
         }
     }

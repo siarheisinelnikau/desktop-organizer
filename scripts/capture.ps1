@@ -20,10 +20,12 @@ try {
     & cargo build --locked --offline --release --jobs 2
     if ($LASTEXITCODE -ne 0) { throw 'Capture build failed.' }
     $executable = Join-Path $repository 'target/release/DesktopOrganizer.exe'
-    foreach ($screen in @('library', 'organize', 'settings', 'group')) {
-        $output = Join-Path $OutputDirectory "$screen.png"
+    foreach ($name in @('library', 'organize', 'settings', 'group', 'settings-ai')) {
+        $screen = if ($name -eq 'settings-ai') { 'settings' } else { $name }
+        $output = Join-Path $OutputDirectory "$name.png"
         $started = [DateTime]::UtcNow
         $arguments = @('--capture', ('"' + $output + '"'), '--screen', $screen, '--fixture-root', ('"' + $fixture + '"'))
+        if ($name -eq 'settings-ai') { $arguments += @('--scenario', 'ai-setup') }
         $process = Start-Process -FilePath $executable -WorkingDirectory $repository -ArgumentList $arguments -WindowStyle Hidden -PassThru
         if (!$process.WaitForExit(15000)) { Stop-Process -Id $process.Id; throw "Capture timed out: $screen" }
         if ($process.ExitCode -ne 0) { throw "Capture failed: $screen (exit $($process.ExitCode))" }
@@ -31,6 +33,6 @@ try {
         if ($image.LastWriteTimeUtc -lt $started) { throw "Capture file is stale: $screen" }
         $bytes = [IO.File]::ReadAllBytes($output)
         if ($bytes.Length -lt 24 -or $bytes[0] -ne 137 -or $bytes[1] -ne 80 -or $bytes[2] -ne 78 -or $bytes[3] -ne 71) { throw "Invalid PNG: $screen" }
-        Write-Output "Saved actual $screen client area; capture PID $($process.Id) exited successfully."
+        Write-Output "Saved actual $name client area; capture PID $($process.Id) exited successfully."
     }
 } finally { Pop-Location }

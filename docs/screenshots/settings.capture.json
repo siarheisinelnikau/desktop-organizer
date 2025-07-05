@@ -1,10 +1,10 @@
 {
   "backend": "CPU GDI / native controls",
   "dpi": 96,
-  "elapsed_ms": 22,
+  "elapsed_ms": 27,
   "group_rasters": 0,
-  "layouts": 2,
-  "main_rasters": 4,
+  "layouts": 3,
+  "main_rasters": 3,
   "network_requests": 0,
   "pixels": [
     1000,
