@@ -19,7 +19,7 @@ impl Options {
         }
         if !args.iter().any(|a| a == "--capture" || a == "--diagnose") {
             anyhow::bail!(
-                "Unknown command line. Use --capture ABSOLUTE.png --screen library|organize|settings|group [--fixture-root PATH] [--scenario populated|empty|error|long-names] [--scale 100|125|150]"
+                "Unknown command line. Use --capture ABSOLUTE.png --screen library|organize|settings|group [--fixture-root PATH] [--scenario populated|empty|error|long-names|ai-setup] [--scale 100|125|150]"
             );
         }
         let mut result = Self {
@@ -162,6 +162,32 @@ pub(super) unsafe fn save(options: &Options, main: HWND) -> Result<()> {
             outer.right - outer.left,
             outer.bottom - outer.top,
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE,
+        );
+        // Automatic scrollbar visibility can change the client extent during WM_SIZE.
+        // Correct that finite resize before rendering exactly the requested viewport.
+        for _ in 0..3 {
+            let mut client = RECT::default();
+            GetClientRect(target, &mut client);
+            if client.right == width && client.bottom == height {
+                break;
+            }
+            let mut window = RECT::default();
+            GetWindowRect(target, &mut window);
+            SetWindowPos(
+                target,
+                null_mut(),
+                0,
+                0,
+                window.right - window.left + width - client.right,
+                window.bottom - window.top + height - client.bottom,
+                SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE,
+            );
+        }
+        let mut client = RECT::default();
+        GetClientRect(target, &mut client);
+        ensure!(
+            client.right == width && client.bottom == height,
+            "Capture viewport did not settle"
         );
         let source = GetDC(target);
         ensure!(!source.is_null(), "Cannot create capture DC");

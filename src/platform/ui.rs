@@ -1184,15 +1184,6 @@ impl App {
             SendMessageW(self.c(AI_ITEMS), LB_SETSEL, 1, -1);
         }
         self.update_actions();
-        for control in &self.controls {
-            if matches!(control.id, PAGE_LIBRARY | PAGE_AI | PAGE_SETTINGS) {
-                SetWindowLongPtrW(
-                    control.hwnd,
-                    GWLP_USERDATA,
-                    (control.id - 100 == page as u16) as isize,
-                );
-            }
-        }
         if visible {
             SendMessageW(self.hwnd, WM_SETREDRAW, 1, 0);
         }
@@ -1689,6 +1680,13 @@ impl App {
         let ready = self.task == 0 && self.quitting.is_none();
         let suggested = !self.text(JSON).is_empty();
         for control in &self.controls {
+            if matches!(control.id, PAGE_LIBRARY | PAGE_AI | PAGE_SETTINGS) {
+                SetWindowLongPtrW(
+                    control.hwnd,
+                    GWLP_USERDATA,
+                    (control.id - 100 == self.page as u16) as isize,
+                );
+            }
             set_control_visible(control.hwnd, self.control_visible(control));
         }
         set_control_visible(

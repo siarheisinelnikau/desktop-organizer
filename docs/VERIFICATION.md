@@ -6,7 +6,7 @@ Work stays in `E:/work/github/desktop-organizer`, with two Cargo jobs and a loca
 
 ## Automated checks
 
-Rust/Cargo 1.96.1: formatting, Clippy with warnings denied, **18 library tests**, optimized Windows x64 compilation and packaging passed. Tests cover grouping/selected-item preservation, metadata serialization privacy, malformed/unknown/duplicate model output, URL restrictions, DPAPI on a synthetic token, release selection, root/name validation, no-overwrite moves, changed content, collision/undo/recovery, atomic persistence, capture argument isolation and group tile hit testing.
+Rust/Cargo 1.96.1: formatting, Clippy with warnings denied, **19 library tests**, optimized Windows x64 compilation and packaging passed. Tests cover grouping/selected-item preservation, folder refresh preserving manual assignments, metadata serialization privacy, malformed/unknown/duplicate model output, URL restrictions, DPAPI on a synthetic token, release selection, root/name validation, no-overwrite moves, changed content, collision/undo/recovery, atomic persistence, capture argument isolation and group tile hit testing.
 
 The executable is inspected without execution by `scripts/inspect_binary.py`: x64, Windows GUI subsystem, embedded `asInvoker` / `PerMonitorV2` / Common Controls v6 manifest, and no dynamic MSVC/UCRT dependency. The packaged checksum is in `dist/SHA256SUMS`.
 
@@ -20,21 +20,24 @@ git diff --check
 
 ## Actual visual evidence
 
-The four PNGs in `docs/screenshots/` are production Win32 controls plus the shared CPU GDI renderer. They show populated library, editable group preview, settings and a document group, at 100% scale. They are client-area captures, excluding OS title bars/menus and the physical taskbar. Each process saved its PNG and capture metadata, exited with code 0, made no startup network request, and did not load or save normal user settings.
+The five PNGs in `docs/screenshots/` are production Win32 controls plus the shared CPU GDI renderer. They show populated library, editable group preview, settings, expanded optional AI setup and a document group, at 100% scale. They are client-area captures, excluding OS title bars/menus and the physical taskbar. Each process saved its PNG and capture metadata, exited with code 0, made no startup network request, and did not load or save normal user settings. The capture path corrects its client extent after native scrollbars settle, avoiding unrendered strips at the viewport edge.
 
-Additional local captures reviewed empty/error states and a long filename at 125% scale. Fields/actions stayed accessible; a long row uses horizontal scrolling rather than shrinking text. These are deliberate developer scenarios, not claims that the UI was driven by real input. The empty state now explains the next action; unavailable operations are disabled; optional filesystem controls are hidden until selected. The source uses the same tile geometry for painting and pointer hit testing.
+Additional local captures reviewed empty/error states and a long filename at 125% scale. Fields/actions stayed accessible; long row labels use ellipsis rather than shrinking text. These are deliberate developer scenarios, not claims that the UI was driven by real input. The empty state explains the next action; unavailable operations are disabled; optional filesystem controls are hidden until selected. Native owner-drawn lists retain their real strings and selection semantics. The source uses the same tile geometry for painting and pointer hit testing.
 
 ## Rendering/load gate evidence
 
 Source/configuration review: native Win32 controls and GDI CPU drawing, no wgpu/OpenGL/DirectX renderer. Normal dispatch sleeps in GetMessage. Save debounce is one-shot. Workers block in bounded queues; network and file work use separate workers. Paint does not self-invalidate. Hidden/minimized WM_PAINT validates its region without building/rasterizing a scene. Capture mode explicitly renders a finite offscreen frame and exits.
 
-Final bounded diagnostic: optimized `target/release/DesktopOrganizer.exe`, PID **21648**, six synthetic files, one second of settling followed by five seconds of sampling per state. This native diagnostic used no mouse/keyboard injection or computer-use API. See `diagnostics/runtime.json` for the original report.
+Final bounded diagnostic: optimized `target/release/DesktopOrganizer.exe`, PID **28488**, six synthetic files, one second of settling followed by five seconds of sampling per state. This native diagnostic used no mouse/keyboard injection or computer-use API. See `diagnostics/runtime.json` for the original report.
 
 | State | Sample | CPU seconds | One-core CPU | Main/group rasters | Layouts / owner draws |
 | --- | --- | --- | --- | --- | --- |
-| Visible settled | 5.012 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
-| Hidden settled | 5.002 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
-| Restored settled | 5.006 s | 0.09375 | 1.87% (0.094% machine-wide) | 0 / 0 | 0 / 0 |
+| Visible settled | 5.006 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
+| After navigation settled | 5.001 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
+| Hidden settled | 5.021 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
+| Restored settled | 5.013 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
+
+Thirty transitions through Tidy up → Settings → My groups used the production command dispatcher. They caused **zero shared control-font recreations**, **zero layout passes**, and **zero unexpected visible controls**, including refreshes while another page was selected. Main-scene painting did not reenter the command dispatcher; the longest command dispatch was **7.30 ms**. This measures native dispatch/visibility, not a compositor frame time or subjective flicker.
 
 No sustained scene generation occurred in these settled windows. The native system-close path preserved the actual HWND and hid settings to tray; the production restore dispatcher made the window visible again. Tray registration succeeded outside the sandbox. The process exited normally after the bounded run. The earlier sandbox diagnostic could not register a tray icon, but kept settings accessible as designed.
 
@@ -43,10 +46,12 @@ This passes the narrow native idle/hidden/restore check. It does **not** establi
 ## Repairs verified at the appropriate level
 
 - DefWindowProc now runs after releasing App state, allowing synchronous system-close/resize reentry to reach custom handlers. The SC_CLOSE-to-WM_CLOSE close/restore path was checked by the bounded native diagnostic.
+- Page changes batch visibility updates under a redraw transaction, keep existing geometry/fonts, and invalidate once. Parent drawing uses a CPU back buffer; native descendants use WS_EX_COMPOSITED. Hidden lists are not re-enabled with WM_SETREDRAW, which would otherwise set WS_VISIBLE. Initial and subsequent navigation highlights match the selected page.
 - Tray registration is deferred until the dispatcher is ready. Failure keeps settings available and prevents an inaccessible hide; TaskbarCreated can retry.
 - Show groups raises non-topmost group windows. Fullscreen detection includes transitions back into this process.
 - Collapsed groups no longer rasterize clipped file tiles. Group header/tile layout shares the tested hit-test grid.
 - The consumer preview uses names and direct reassignment instead of JSON/IDs. Disabled, empty and error presentation was reviewed from actual component captures.
+- Original line icons, colored file/category badges, shorter actions, one-step folder import, a percentage opacity slider and collapsed optional AI setup replace the dense text/form presentation. Folder refresh preserves manual grouping (fixture test).
 
 ## Remaining interactive/hardware checks
 
