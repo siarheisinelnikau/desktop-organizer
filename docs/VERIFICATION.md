@@ -69,3 +69,23 @@ Do not use the real Desktop for destructive checks. The following remain separat
 External system Temp atomic renames were denied during the original code-only pass, so fixtures use repository-local directories. Clippy automatic-fix socket creation was denied; ordinary Clippy and manual fixes work. Cargo occasionally warns that its incremental hard links fall back to copying. No escalation, driver/settings changes or unrelated-process termination was used to work around these build limitations.
 
 No repository/release publication was authorized. Complete the remaining interactive checks and review version, checksum, dependencies and release notes before any separately authorized publication through the GitHub plugin.
+
+
+## Shared updater and icon audit — 2026-11-01
+
+The portable executable now embeds the established four-tile artwork at 16, 20, 24, 32, 48, 64, 128 and 256 pixels. Main/group window classes use native large/small handles from `LoadIconMetric`; the tray uses the small handle. The previous code created only one runtime 32-pixel icon and supplied no Explorer EXE icon. `scripts/verify-icons.py` loads the optimized artifact as resource data, checks its group sizes, and draws each small icon with `LoadImageW`/`DrawIconEx` on light/dark backgrounds. [The inspected resource proof](screenshots/embedded-icons.png) is not an OS tray screenshot. [Resource metadata](verification/icons-2026-11-01.json) identifies the checked binary/hash.
+
+Release discovery, download/integrity checks, staging, helper handoff, replacement and cleanup now live in the sibling `rust-auto-updator` core. Product glue retains canonical repository/version, `DesktopOrganizer-vVERSION.exe`, `SHA256SUMS`, a 128 MiB transfer limit and an x64 Windows GUI PE requirement. The host still saves the layout before handing off. Its new helper protocol is routed before normal startup and cleanup runs after controls/groups initialize. Previously released update helpers are copies of the previous executable and retain their own old CLI implementation. No live update or network call was executed. Builds require the sibling core workspace and Rust 1.95+, including on CI; its publication/provisioning remains separate work. Packaging includes its MIT license.
+
+Final checks: formatting, Clippy with no lint findings, 17 library tests, optimized build/package and PE inspection passed. Cargo's incremental hard-link warnings used copying fallback. The removed local updater tests are covered by the shared core suite instead.
+
+The final optimized EXE (4,320,256 bytes) ran its finite `--diagnose` mode on three synthetic references (PID 25060), with an external 45-second timeout and successful exit. The actual backend is native Win32 controls and CPU GDI. [The final raw diagnostic](verification/render-2026-11-01.json) records four approximately five-second samples:
+
+| State | Main/group rasters | Layout/owner draws | One-core CPU | Machine CPU |
+| --- | --- | --- | --- | --- |
+| Visible settled | 0 / 0 | 0 / 0 | 0% | 0% |
+| After 30 native page dispatches | 0 / 0 | 0 / 0 | 0% | 0% |
+| Hidden settled | 0 / 0 | 0 / 0 | 0% | 0% |
+| Restored settled | 0 / 0 | 0 / 0 | 0% | 0% |
+
+CPU is sampled with Windows process CPU time and its finite clock resolution; zero is a measured delta, not a guarantee of zero work forever. Navigation recreated no fonts, exposed no wrong-page controls and performed no main-scene paint inside command dispatch; maximum command dispatch was 29.81 ms under concurrent compilation. Native restoration made the window visible. The sandbox refused shell tray registration, so close-to-tray, physical tray clicks/menus, foreground activation, mixed-monitor DPI and interactive lag remain unverified. No computer use/input injection or desktop screenshots were used. GPU/compositor latency was not measured; this does not certify system-wide presentation behavior.

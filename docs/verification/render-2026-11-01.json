@@ -1,0 +1,68 @@
+{
+  "backend": "CPU GDI / native Win32 controls; no GPU renderer",
+  "executable": "E:\\work\\github\\desktop-organizer\\target\\release\\DesktopOrganizer.exe",
+  "fixture_items": 3,
+  "gpu_telemetry": "not collected; compositor/driver timing is not certified",
+  "navigation": {
+    "count": 30,
+    "fonts_created": 0,
+    "layouts": 0,
+    "max_dispatch_ms": 29.8083,
+    "scene_paints_during_dispatch": 0,
+    "scope": "native dispatch and visibility; not a subjective flicker or presentation-latency measurement",
+    "unexpected_visibility": 0
+  },
+  "pid": 25060,
+  "profile": "release",
+  "restore_visible": true,
+  "samples": [
+    {
+      "cpu_machine_percent": 0.0,
+      "cpu_one_core_percent": 0.0,
+      "cpu_seconds": 0.0,
+      "group_rasters": 0,
+      "layouts": 0,
+      "main_rasters": 0,
+      "owner_draws": 0,
+      "seconds": 5.0000319,
+      "state": "visible settled"
+    },
+    {
+      "cpu_machine_percent": 0.0,
+      "cpu_one_core_percent": 0.0,
+      "cpu_seconds": 0.0,
+      "group_rasters": 0,
+      "layouts": 0,
+      "main_rasters": 0,
+      "owner_draws": 0,
+      "seconds": 5.003574,
+      "state": "after navigation settled"
+    },
+    {
+      "cpu_machine_percent": 0.0,
+      "cpu_one_core_percent": 0.0,
+      "cpu_seconds": 0.0,
+      "group_rasters": 0,
+      "layouts": 0,
+      "main_rasters": 0,
+      "owner_draws": 0,
+      "seconds": 5.0001575,
+      "state": "hidden settled"
+    },
+    {
+      "cpu_machine_percent": 0.0,
+      "cpu_one_core_percent": 0.0,
+      "cpu_seconds": 0.0,
+      "group_rasters": 0,
+      "layouts": 0,
+      "main_rasters": 0,
+      "owner_draws": 0,
+      "seconds": 5.0080128,
+      "state": "restored settled"
+    }
+  ],
+  "scope": "isolated in-process integration and idle load; physical tray clicks and keyboard traversal not tested",
+  "system_close_hid_to_tray": false,
+  "system_close_preserved_window": true,
+  "tray_registered": false
+}

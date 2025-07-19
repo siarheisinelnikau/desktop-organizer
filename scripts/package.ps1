@@ -26,6 +26,7 @@ try {
     Copy-Item -LiteralPath 'LICENSE' -Destination (Join-Path $output 'LICENSE') -Force
     $hash = (Get-FileHash -LiteralPath (Join-Path $output $name) -Algorithm SHA256).Hash.ToLowerInvariant()
     [System.IO.File]::WriteAllText((Join-Path $output 'SHA256SUMS'), "$hash  $name`n", [System.Text.UTF8Encoding]::new($false))
+    Copy-Item -LiteralPath '../rust-auto-updator/LICENSE' -Destination (Join-Path $output 'LICENSE-rust-auto-updator.txt') -Force
     $notices = [System.Text.StringBuilder]::new()
     [void]$notices.AppendLine('Third-party notices for the complete Cargo.lock dependency graph (including build/test and other-platform packages).')
     foreach ($dependency in ($metadata.packages | Sort-Object name, version)) {

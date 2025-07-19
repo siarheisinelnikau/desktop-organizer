@@ -24,24 +24,14 @@ const BG: u32 = rgb(249, 250, 253);
 const INK: u32 = rgb(31, 44, 63);
 const MUTED: u32 = rgb(106, 119, 138);
 const BLUE: u32 = rgb(82, 102, 204);
-pub(super) unsafe fn application_icon(instance: HINSTANCE) -> Result<HICON> {
+pub(super) unsafe fn application_icon(instance: HINSTANCE, small: bool) -> Result<HICON> {
     unsafe {
-        let mut pixels = vec![0u8; 32 * 32 * 4];
-        let mask = [0u8; 32 * 4];
-        for y in 0..32 {
-            for x in 0..32 {
-                let tile = ((6..14).contains(&x) || (18..26).contains(&x))
-                    && ((6..14).contains(&y) || (18..26).contains(&y));
-                let color = if tile {
-                    [255, 255, 255, 255]
-                } else {
-                    [204, 102, 82, 255]
-                };
-                pixels[(y * 32 + x) * 4..(y * 32 + x + 1) * 4].copy_from_slice(&color);
-            }
-        }
-        let icon = CreateIcon(instance, 32, 32, 1, 32, mask.as_ptr(), pixels.as_ptr());
-        ensure!(!icon.is_null(), "Cannot create application icon");
+        let mut icon = null_mut();
+        let metric = if small { LIM_SMALL } else { LIM_LARGE };
+        ensure!(
+            LoadIconMetric(instance, 1usize as PCWSTR, metric, &mut icon) >= 0 && !icon.is_null(),
+            "Cannot load the embedded application icon"
+        );
         Ok(icon)
     }
 }
