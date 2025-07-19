@@ -31,8 +31,8 @@ pub enum Job {
     Undo(PathBuf),
     Recover(PathBuf),
     Check,
-    Download(updates::Available, PathBuf),
-    Install(PathBuf, String),
+    Download(updates::Available),
+    Install(updates::Prepared),
 }
 pub enum Event {
     Saved(u64, Result<()>),
@@ -45,7 +45,7 @@ pub enum Event {
     Recovered(Result<Plan>),
     Checked(Result<Option<updates::Available>>),
     Progress(u64, u64),
-    Downloaded(Result<PathBuf>),
+    Downloaded(Result<updates::Prepared>),
     Installed(Result<()>),
 }
 
@@ -140,26 +140,12 @@ impl Worker {
                                 Event::Recovered(result)
                             }
                             Job::Check => Event::Checked(updates::check()),
-                            Job::Download(update, dir) => {
-                                Event::Downloaded(updates::download(&update, &dir, |n, total| {
+                            Job::Download(update) => {
+                                Event::Downloaded(updates::download(&update, |n, total| {
                                     publish(Event::Progress(n, total))
                                 }))
                             }
-                            Job::Install(stage, digest) => {
-                                #[cfg(windows)]
-                                {
-                                    Event::Installed(crate::platform::updater::schedule(
-                                        &stage, &digest,
-                                    ))
-                                }
-                                #[cfg(not(windows))]
-                                {
-                                    let _ = (stage, digest);
-                                    Event::Installed(Err(anyhow::anyhow!(
-                                        "Installation requires Windows"
-                                    )))
-                                }
-                            }
+                            Job::Install(prepared) => Event::Installed(updates::install(prepared)),
                         };
                         publish(event);
                     }

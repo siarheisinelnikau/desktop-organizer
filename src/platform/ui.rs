@@ -136,6 +136,7 @@ struct App {
     font: HFONT,
     font_dpi: u32,
     icon: HICON,
+    small_icon: HICON,
     task: u8,
     scope: Vec<Item>,
     plan: Option<Plan>,
@@ -146,7 +147,7 @@ struct App {
     fullscreen: bool,
     save_sequence: u64,
     quitting: Option<u64>,
-    pending_install: Option<(PathBuf, String)>,
+    pending_install: Option<updates::Prepared>,
     dirty: bool,
     main_scroll: POINT,
     tray_message: u32,
@@ -190,7 +191,15 @@ fn unscale(value: i32, dpi: u32) -> i32 {
 }
 
 pub fn run() {
-    let diagnostic = match capture::Options::parse(std::env::args_os().skip(1)) {
+    let mut arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
+    if arguments
+        .first()
+        .is_some_and(|arg| arg == "--cleanup-update")
+        && arguments.len() == 2
+    {
+        arguments.clear();
+    }
+    let diagnostic = match capture::Options::parse(arguments.into_iter()) {
         Ok(options) => options,
         Err(error) => {
             eprintln!("{error:#}");
@@ -256,7 +265,8 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
     };
     layout.validate()?;
     let instance = GetModuleHandleW(null());
-    let icon = theme::application_icon(instance)?;
+    let icon = theme::application_icon(instance, false)?;
+    let small_icon = theme::application_icon(instance, true)?;
     for (class, proc) in [
         (
             MAIN_CLASS,
@@ -274,7 +284,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
             hInstance: instance,
             hCursor: LoadCursorW(null_mut(), IDC_ARROW),
             hIcon: icon,
-            hIconSm: icon,
+            hIconSm: small_icon,
             hbrBackground: (COLOR_WINDOW + 1) as HBRUSH,
             lpszClassName: class,
             ..zeroed()
@@ -316,6 +326,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         font: null_mut(),
         font_dpi: 0,
         icon,
+        small_icon,
         task: 0,
         scope: vec![],
         plan: None,
@@ -386,6 +397,9 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         app.position_controls();
         Ok(())
     })?;
+    if diagnostic.is_none() {
+        super::updater::cleanup_after_startup();
+    }
     if let Some(options) = diagnostic {
         let result = if options.diagnose {
             diagnostic::run(&options, hwnd)
@@ -401,6 +415,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
                     DeleteObject(app.font);
                 }
                 DestroyIcon(app.icon);
+                DestroyIcon(app.small_icon);
             }
         });
         DestroyWindow(hwnd);
@@ -452,6 +467,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
                 DestroyWindow(window.hwnd);
             }
             DestroyIcon(app.icon);
+            DestroyIcon(app.small_icon);
         }
     });
     CoUninitialize();
@@ -1665,8 +1681,7 @@ impl App {
                     .available
                     .clone()
                     .context("Check for an available compatible release first")?;
-                self.worker
-                    .submit(Job::Download(update, self.data.join("updates")))?;
+                self.worker.submit(Job::Download(update))?;
                 self.task = 7;
                 self.set_update(
                     "Downloading update: 0%. The current executable and settings are preserved.",
@@ -1792,8 +1807,8 @@ impl App {
                 Event::Saved(sequence, result) => match result {
                     Ok(()) => {
                         if self.quitting == Some(sequence) {
-                            if let Some((stage, digest)) = self.pending_install.take() {
-                                match self.worker.submit(Job::Install(stage, digest)) {
+                            if let Some(prepared) = self.pending_install.take() {
+                                match self.worker.submit(Job::Install(prepared)) {
                                     Ok(()) => {
                                         self.task = 8;
                                         self.set_update(
@@ -1931,13 +1946,7 @@ impl App {
                     self.task = 0;
                     match result {
                         Ok(stage) => {
-                            let digest = self
-                                .available
-                                .as_ref()
-                                .and_then(|a| a.asset.digest.as_deref())
-                                .and_then(|d| d.strip_prefix("sha256:"))
-                                .unwrap_or("");
-                            self.pending_install = Some((stage, digest.to_owned()));
+                            self.pending_install = Some(stage);
                             match self.flush_save() {
                                 Ok(sequence) => {
                                     self.quitting = Some(sequence);
@@ -2076,7 +2085,7 @@ impl App {
         icon.uID = 1;
         icon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
         icon.uCallbackMessage = TRAY;
-        icon.hIcon = self.icon;
+        icon.hIcon = self.small_icon;
         let tip = wide("DesktopOrganizer — Click for settings");
         icon.szTip[..tip.len()].copy_from_slice(&tip);
         ensure!(

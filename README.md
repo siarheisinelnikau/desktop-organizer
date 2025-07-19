@@ -18,7 +18,7 @@ Groups are ordinary **non-topmost tool windows**, independent of Explorer. This 
 
 ## Build and package
 
-Requires an existing Rust 1.88+ MSVC x64 toolchain and Windows SDK/linker; the validated toolchain is Rust 1.96.1. The target is Windows 10/11 x64. Older Windows and other executable architectures are unsupported. Runtime uses standard Windows APIs and a statically linked MSVC runtime; no application DLL bundle is needed.
+Requires an existing Rust 1.95+ MSVC x64 toolchain and Windows SDK/linker; the validated toolchain is Rust 1.96.1. The target is Windows 10/11 x64. Older Windows and other executable architectures are unsupported. Runtime uses standard Windows APIs and a statically linked MSVC runtime; no application DLL bundle is needed.
 
 ```powershell
 cd E:\work\github\desktop-organizer
@@ -29,6 +29,8 @@ cargo fetch --locked
 # Optional static inspection with Python 3 (never loads/executes the EXE):
 python scripts/inspect_binary.py dist/DesktopOrganizer-v0.1.0.exe
 ```
+
+The shared updater workspace must be present at `../rust-auto-updator`; its core crate is a local path dependency, not a published package. CI runners must provision that sibling workspace before Cargo resolution. Standalone repository checkout is insufficient until the shared workspace is published or separately supplied.
 
 Cargo uses at most two jobs and this repository's `target/`. Verification and packaging use `--offline` and never launch the GUI, updater helper, or any item. The output is `dist/DesktopOrganizer-v0.1.0.exe`, with `LICENSE`, `SHA256SUMS` and third-party license texts. This is one executable architecture, so its asset name has no architecture suffix. The binary is currently unsigned; no release or signing certificate is implied.
 
@@ -76,9 +78,9 @@ Journal entries are flushed before and after each rename. An interrupted operati
 
 **Check updates** uses the public stable release API for the canonical repository without GitHub login. **Check for updates on startup** is enabled by default; save this toggle to disable startup requests. Startup checks do not block launch, show intrusive failure/no-update dialogs, download or install automatically. Available updates remain visible in Settings. Missing/unpublished releases, rate limits and connectivity errors are reported as unavailable/error, not as up-to-date.
 
-**Download & install** requires a compatible `DesktopOrganizer-vVERSION.exe` asset and its GitHub-provided SHA-256 digest. It bounds download size, reports progress, verifies the staged bytes, saves the current layout, and starts a temporary copy of this executable as a helper. The helper waits for the app to exit, prepares and verifies a file beside the installed executable, backs up the previous EXE, atomically replaces it, then relaunches. Settings/user files are never replaced. Installation needs a writable EXE directory and no administrator rights. The launch path is preserved, so a locally versioned filename can retain its old name after an in-place update; the installed version shown in settings comes from the binary itself.
+**Download & install** uses the shared `rust-auto-updator` core with this product's canonical repository/version/asset configuration. A release must include `DesktopOrganizer-vVERSION.exe` and `SHA256SUMS` for that exact asset. The core bounds the transfer, verifies SHA-256 and the x64 PE structure, stages beside the installed executable, and reports progress. Any GitHub-provided digest must agree with the checksum file. The application saves its layout before handing the verified update to the shared helper, and exits only after handoff succeeds. The helper waits for the original process, verifies its identity and unchanged installed bytes, atomically replaces the EXE with a backup, and restarts it. Settings and user files are never replaced.
 
-The helper records failures in `%LOCALAPPDATA%\DesktopOrganizer\update-error.txt` for display on the next launch. A leftover `.exe.previous` or `.exe.incoming` indicates an interrupted update; preserve/inspect the backup before resolving it. Failed installations keep the existing executable or its backup. Verified/partial staged files and old helper copies can be inspected/removed in the app's `updates/` directory while no update is running. No update download, helper launch or actual application replacement was executed during this work session.
+Installation needs a writable EXE directory and no administrator rights. The shared staging folder uses `.desktop-organizer-update-` beside the executable; successful startup removes only known staged updater files. Preserve a failed staging folder/backup for investigation. A helper error is also recorded in `%LOCALAPPDATA%\DesktopOrganizer\update-error.txt`. No update download, helper launch or actual application replacement was executed during this audit.
 
 ## Verification and screenshots
 
@@ -107,3 +109,10 @@ Developer-only examples (use absolute output and fixture paths):
 ```
 
 Capture supports `library`, `organize`, `settings`, `group`, scenarios `populated`, `empty`, `error`, `long-names`, `ai-setup`, and scale 100/125/150. Diagnostic mode runs 30 native page transitions and finite visible/hidden/restore tests with five-second sampling windows, writes CPU and raster/layout counters, and exits; it can briefly show its own test windows. Apply an external timeout (15 seconds for capture, 35 for diagnosis). Physical tray activation, keyboard navigation, perceived flicker and presentation latency require separate interaction checks.
+
+
+The Windows executable and native small tray handle now share embedded multi-size artwork. This is a resource rendering proof from the actual optimized EXE, not a screenshot of the OS tray:
+
+![Embedded application and small tray icon resource proof](docs/screenshots/embedded-icons.png)
+
+The [2026-11-01 audit record](docs/VERIFICATION.md#shared-updater-and-icon-audit--2026-11-01) includes the checked artifact and measured idle/hidden counters, plus unverified shell interaction limits.
