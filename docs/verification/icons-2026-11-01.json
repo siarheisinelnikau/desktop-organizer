@@ -1,6 +1,6 @@
 {
-  "executable": "E:\\work\\github\\desktop-organizer\\target\\release\\DesktopOrganizer.exe",
-  "sha256": "ebdf0546dfd2f3f0ed58b966e0f1eca9713bdac2f0e5749cd34ab5a16d2124a1",
+  "executable": "E:\\work\\github\\desktop-organizer\\dist\\DesktopOrganizer-v0.1.0.exe",
+  "sha256": "207a75567d021b82e6e600a013318684b307e74c946a57b7675bf1e95878ed9b",
   "resource_sizes": [
     [
       16,
