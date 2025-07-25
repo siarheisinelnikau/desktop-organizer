@@ -79,7 +79,7 @@ Release discovery, download/integrity checks, staging, helper handoff, replaceme
 
 Final checks: formatting, Clippy with no lint findings, 17 library tests, optimized build/package and PE inspection passed. Cargo's incremental hard-link warnings used copying fallback. The removed local updater tests are covered by the shared core suite instead.
 
-The final optimized EXE (4,320,256 bytes) ran its finite `--diagnose` mode on three synthetic references (PID 25060), with an external 45-second timeout and successful exit. The actual backend is native Win32 controls and CPU GDI. [The final raw diagnostic](verification/render-2026-11-01.json) records four approximately five-second samples:
+The final optimized EXE (4,316,160 bytes) ran its finite `--diagnose` mode on three synthetic references (PID 36160), with an external 45-second timeout and successful exit. The actual backend is native Win32 controls and CPU GDI. [The final raw diagnostic](verification/render-2026-11-01.json) records four approximately five-second samples:
 
 | State | Main/group rasters | Layout/owner draws | One-core CPU | Machine CPU |
 | --- | --- | --- | --- | --- |
@@ -88,4 +88,4 @@ The final optimized EXE (4,320,256 bytes) ran its finite `--diagnose` mode on th
 | Hidden settled | 0 / 0 | 0 / 0 | 0% | 0% |
 | Restored settled | 0 / 0 | 0 / 0 | 0% | 0% |
 
-CPU is sampled with Windows process CPU time and its finite clock resolution; zero is a measured delta, not a guarantee of zero work forever. Navigation recreated no fonts, exposed no wrong-page controls and performed no main-scene paint inside command dispatch; maximum command dispatch was 29.81 ms under concurrent compilation. Native restoration made the window visible. The sandbox refused shell tray registration, so close-to-tray, physical tray clicks/menus, foreground activation, mixed-monitor DPI and interactive lag remain unverified. No computer use/input injection or desktop screenshots were used. GPU/compositor latency was not measured; this does not certify system-wide presentation behavior.
+CPU is sampled with Windows process CPU time and its finite clock resolution; zero is a measured delta, not a guarantee of zero work forever. Navigation recreated no fonts, exposed no wrong-page controls and performed no main-scene paint inside command dispatch; maximum command dispatch was 7.90 ms under concurrent compilation. Native restoration made the window visible. The sandbox refused shell tray registration, so close-to-tray, physical tray clicks/menus, foreground activation, mixed-monitor DPI and interactive lag remain unverified. No computer use/input injection or desktop screenshots were used. GPU/compositor latency was not measured; this does not certify system-wide presentation behavior.
