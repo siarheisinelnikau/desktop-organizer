@@ -7,12 +7,12 @@
     "count": 30,
     "fonts_created": 0,
     "layouts": 0,
-    "max_dispatch_ms": 7.2944,
+    "max_dispatch_ms": 8.919500000000001,
     "scene_paints_during_dispatch": 0,
     "scope": "native dispatch and visibility; not a subjective flicker or presentation-latency measurement",
     "unexpected_visibility": 0
   },
-  "pid": 28488,
+  "pid": 14344,
   "profile": "release",
   "restore_visible": true,
   "samples": [
@@ -24,7 +24,7 @@
       "layouts": 0,
       "main_rasters": 0,
       "owner_draws": 0,
-      "seconds": 5.0057351,
+      "seconds": 5.0110746,
       "state": "visible settled"
     },
     {
@@ -35,7 +35,7 @@
       "layouts": 0,
       "main_rasters": 0,
       "owner_draws": 0,
-      "seconds": 5.0009551,
+      "seconds": 5.0027217,
       "state": "after navigation settled"
     },
     {
@@ -46,7 +46,7 @@
       "layouts": 0,
       "main_rasters": 0,
       "owner_draws": 0,
-      "seconds": 5.0214948,
+      "seconds": 5.0122998,
       "state": "hidden settled"
     },
     {
@@ -57,11 +57,19 @@
       "layouts": 0,
       "main_rasters": 0,
       "owner_draws": 0,
-      "seconds": 5.0127252,
+      "seconds": 5.0118243,
       "state": "restored settled"
     }
   ],
   "scope": "isolated in-process integration and idle load; physical tray clicks and keyboard traversal not tested",
+  "settings": {
+    "http_url_and_startup_opt_out_persisted": true,
+    "http_warning_shown": true,
+    "https_warning_hidden": true,
+    "live_provider_requests": 0,
+    "synthetic_token_dpapi_roundtrip": true,
+    "token_field_cleared": true
+  },
   "system_close_hid_to_tray": true,
   "system_close_preserved_window": true,
   "tray_registered": true

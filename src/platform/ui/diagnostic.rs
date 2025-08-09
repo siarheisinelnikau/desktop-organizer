@@ -79,9 +79,56 @@ unsafe fn sample(state: &str) -> Result<serde_json::Value> {
 }
 pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
     unsafe {
+        let (base, key, auto_check, note, data) = APP.with(|cell| {
+            let borrow = cell.borrow();
+            let app = borrow.as_ref().unwrap();
+            (
+                app.c(BASE),
+                app.c(KEY),
+                app.c(AUTO_CHECK),
+                app.c(AI_TRANSPORT_NOTE),
+                app.data.clone(),
+            )
+        });
+        // Only synthetic data is saved in this diagnostic's explicit output directory.
+        // Use native notifications/Save settings, without connecting to this example address.
+        SetWindowTextW(base, w!("http://192.0.2.10:8080/v1"));
+        let http_note = GetWindowTextLengthW(note) > 0;
+        SetWindowTextW(base, w!("https://example.test/v1"));
+        let https_note_hidden = GetWindowTextLengthW(note) == 0;
+        SetWindowTextW(base, w!("http://192.0.2.10:8080/v1"));
+        let synthetic_token = format!("synthetic-diagnostic-{}", std::process::id());
+        SetWindowTextW(key, wide(&synthetic_token).as_ptr());
+        SendMessageW(auto_check, BM_SETCHECK, BST_UNCHECKED as _, 0);
+        SendMessageW(hwnd, WM_COMMAND, SAVE_SETTINGS as usize, 0);
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let settings_persisted = loop {
+            pump(Duration::from_millis(50))?;
+            if let Ok(layout) = persistence::load::<Layout>(&data.join("layout.json")) {
+                let mut plaintext =
+                    super::super::secrets::unprotect(&layout.settings.protected_api_key)?;
+                let correct = layout.settings.ai_base_url == "http://192.0.2.10:8080/v1"
+                    && !layout.settings.startup_update_check
+                    && plaintext == synthetic_token.as_bytes();
+                plaintext.fill(0);
+                if correct {
+                    break true;
+                }
+            }
+            if Instant::now() >= deadline {
+                break false;
+            }
+        };
+        let token_field_cleared = GetWindowTextLengthW(key) == 0;
+        ensure!(
+            http_note && https_note_hidden && settings_persisted && token_field_cleared,
+            "Native HTTP settings save regression"
+        );
+        let settings_check = serde_json::json!({"http_warning_shown":http_note,"https_warning_hidden":https_note_hidden,"http_url_and_startup_opt_out_persisted":settings_persisted,"synthetic_token_dpapi_roundtrip":settings_persisted,"token_field_cleared":token_field_cleared,"live_provider_requests":0});
         APP.with(|cell| {
             let mut borrow = cell.borrow_mut();
             let app = borrow.as_mut().unwrap();
+            app.status("");
             app.hidden = false;
             app.show_groups();
             app.register_tray();
@@ -144,7 +191,7 @@ pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
         let report = serde_json::json!({"pid":std::process::id(),"executable":std::env::current_exe()?,"profile":"release",
         "backend":"CPU GDI / native Win32 controls; no GPU renderer","fixture_items":APP.with(|c|c.borrow().as_ref().unwrap().layout.items.len()),
         "tray_registered":tray_registered,"system_close_preserved_window":close_preserved_window,"system_close_hid_to_tray":close_hid_to_tray,
-        "restore_visible":restored_visible,"navigation":transitions,"samples":[visible,after_navigation,hidden,restored],
+        "restore_visible":restored_visible,"settings":settings_check,"navigation":transitions,"samples":[visible,after_navigation,hidden,restored],
         "gpu_telemetry":"not collected; compositor/driver timing is not certified",
         "scope":"isolated in-process integration and idle load; physical tray clicks and keyboard traversal not tested"});
         fs::create_dir_all(options.output.parent().context("Missing report parent")?)?;

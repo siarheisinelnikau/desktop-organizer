@@ -210,9 +210,9 @@ impl App {
             self.controls.retain(|c| c.id != 0);
             for c in &mut self.controls {
                 c.rect = match c.id {
-                    PAGE_LIBRARY => (16, 122, 160, 44),
-                    PAGE_AI => (16, 176, 160, 44),
-                    PAGE_SETTINGS => (16, 230, 160, 44),
+                    PAGE_LIBRARY => (16, 26, 160, 44),
+                    PAGE_AI => (16, 80, 160, 44),
+                    PAGE_SETTINGS => (16, 134, 160, 44),
                     SHOW_GROUPS => (806, 26, 174, 40),
                     ROOT | JSON | OPACITY => {
                         c.page = 9;
@@ -247,22 +247,22 @@ impl App {
                     }
                     MODEL => {
                         c.page = 4;
-                        (342, 335, 618, 32)
+                        (342, 350, 618, 32)
                     }
                     KEY => {
                         c.page = 4;
-                        (342, 377, 350, 32)
+                        (342, 392, 350, 32)
                     }
                     CLEAR_KEY => {
                         c.page = 4;
-                        (710, 377, 250, 30)
+                        (710, 392, 250, 30)
                     }
                     SAVE_SETTINGS => (774, 454, 186, 36),
                     AUTO_CHECK => (240, 556, 328, 28),
                     CHECK => (590, 550, 174, 36),
                     INSTALL => (776, 550, 184, 36),
                     UPDATE_STATUS => (240, 602, 720, 50),
-                    STATUS => (264, 702, 670, 34),
+                    STATUS => (240, 702, 720, 34),
                     QUIT => (16, 714, 160, 34),
                     _ => c.rect,
                 };
@@ -390,12 +390,21 @@ impl App {
             self.button(AI_SETUP, 3, "Connect AI", (772, 326, 188, 38));
             self.label(3, "AI suggestions", (240, 254, 500, 26));
             self.label(4, "Base URL", (240, 298, 96, 24));
-            self.label(4, "Model", (240, 340, 96, 24));
-            self.label(4, "New token", (240, 382, 96, 24));
+            self.control(
+                AI_TRANSPORT_NOTE,
+                4,
+                w!("STATIC"),
+                "",
+                0,
+                (342, 327, 618, 20),
+            );
+            self.sync_ai_transport_note();
+            self.label(4, "Model", (240, 355, 96, 24));
+            self.label(4, "New token", (240, 397, 96, 24));
             self.label(
                 4,
                 "Leave the token blank to keep the saved one.",
-                (240, 422, 720, 24),
+                (240, 428, 720, 24),
             );
             self.label(
                 3,
@@ -507,39 +516,6 @@ impl App {
                     bottom: client.bottom,
                 },
                 NAV,
-            );
-            rounded(dc, rect(20, 26, 36, 36), BLUE, BLUE, 10);
-            for x in [28, 42] {
-                for y in [34, 48] {
-                    fill(dc, rect(x, y, 8, 8), rgb(255, 255, 255));
-                }
-            }
-            heading(
-                dc,
-                "DesktopOrganizer",
-                rect(20, 76, 170, 32),
-                16,
-                INK,
-                true,
-                dpi,
-            );
-            heading(
-                dc,
-                "ON THIS PC",
-                rect(20, 660, 166, 24),
-                11,
-                MUTED,
-                false,
-                dpi,
-            );
-            heading(
-                dc,
-                &format!("Version {}", updates::INSTALLED),
-                rect(20, 686, 166, 24),
-                12,
-                MUTED,
-                false,
-                dpi,
             );
             let (title, subtitle) = match self.page {
                 1 => ("Your space", "Give everyday files a home."),
@@ -667,22 +643,15 @@ Your originals stay right where they are.",
                     8,
                 );
             }
-            rounded(
-                dc,
-                rect(220, 686, 760, 64),
-                rgb(255, 255, 255),
-                rgb(228, 233, 241),
-                12,
-            );
-            let footer_icon = rect(236, 704, 18, 18);
-            draw_icon(
-                dc,
-                Glyph::Shield,
-                footer_icon.left,
-                footer_icon.top,
-                scale(18, dpi),
-                MUTED,
-            );
+            if !self.text(STATUS).is_empty() {
+                rounded(
+                    dc,
+                    rect(220, 686, 760, 64),
+                    rgb(255, 255, 255),
+                    rgb(228, 233, 241),
+                    12,
+                );
+            }
         }
     }
 }

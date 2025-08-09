@@ -19,7 +19,7 @@ impl Options {
         }
         if !args.iter().any(|a| a == "--capture" || a == "--diagnose") {
             anyhow::bail!(
-                "Unknown command line. Use --capture ABSOLUTE.png --screen library|organize|settings|group [--fixture-root PATH] [--scenario populated|empty|error|long-names|ai-setup] [--scale 100|125|150]"
+                "Unknown command line. Use --capture ABSOLUTE.png --screen library|organize|settings|group [--fixture-root PATH] [--scenario populated|empty|error|long-names|ai-setup|http-server] [--scale 100|125|150]"
             );
         }
         let mut result = Self {
@@ -66,8 +66,15 @@ impl Options {
             "Unknown capture screen"
         );
         ensure!(
-            ["empty", "populated", "error", "long-names", "ai-setup"]
-                .contains(&result.scenario.as_str()),
+            [
+                "empty",
+                "populated",
+                "error",
+                "long-names",
+                "ai-setup",
+                "http-server"
+            ]
+            .contains(&result.scenario.as_str()),
             "Unknown capture scenario"
         );
         ensure!(
@@ -88,6 +95,9 @@ impl Options {
         // Capture bypasses startup work while showing the production default.
         layout.settings.startup_update_check = true;
         layout.settings.opacity = 255;
+        if self.scenario == "http-server" {
+            layout.settings.ai_base_url = "http://192.0.2.10:8080/v1".into();
+        }
         if self.scenario == "empty" {
             return Ok(layout);
         }

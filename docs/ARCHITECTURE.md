@@ -27,6 +27,10 @@ No startup scan is performed and no default Desktop path is assumed. Import/drop
 
 API tokens are DPAPI blobs in settings; no plaintext token is serialized or intentionally included in errors. Metadata consent is session-only. AI request bodies are constructed from an explicit metadata struct that has no path/content field. Response validation authorizes group names and ID assignments only, with another independent folder-plan validator before filesystem effects.
 
+AI base URLs accept HTTP and HTTPS. The provider panel updates a short unencrypted-transport warning when the address changes; saving is not blocked for HTTP. URL credentials/query/fragment remain disallowed, and requests never follow redirects. A bounded loopback HTTP fixture tests the production network worker through validated group application with a synthetic token.
+
+Update checking uses the shared core. Its current API returns textual failures, so the host maps the exact pinned GitHub 404 failure to a separate public-release-unavailable state. Other failures remain errors; neither becomes an up-to-date result. This adapter is covered by a regression test and does not alter shared download or installation behavior.
+
 ## Primary API references
 
 - [Win32 message loop](https://learn.microsoft.com/en-us/windows/win32/winmsg/using-messages-and-message-queues)

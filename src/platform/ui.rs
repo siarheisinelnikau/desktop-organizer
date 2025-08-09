@@ -47,6 +47,7 @@ const AI_SETUP: u16 = 184;
 const FOLDER_NAME: u16 = 185;
 const OPACITY_SLIDER: u16 = 186;
 const OPACITY_VALUE: u16 = 187;
+const AI_TRANSPORT_NOTE: u16 = 188;
 // TBM_GETPOS is WM_USER + 0; the pinned metadata omits this alias.
 const TBM_GETPOS: u32 = WM_USER;
 
@@ -303,7 +304,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
     let hwnd = CreateWindowExW(
         WS_EX_COMPOSITED,
         MAIN_CLASS,
-        w!("DesktopOrganizer — Library and settings"),
+        w!("DesktopOrganizer"),
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_HSCROLL | WS_VSCROLL,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
@@ -359,7 +360,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         app.rebuild_groups()?;
         if let Some(options) = &diagnostic {
             app.page = options.page();
-            app.ai_setup_open = options.scenario == "ai-setup";
+            app.ai_setup_open = matches!(options.scenario.as_str(), "ai-setup" | "http-server");
             if app.ai_setup_open {
                 app.set(AI_SETUP, "Done");
             }
@@ -368,7 +369,10 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
             if !app.scope.is_empty() {
                 app.set_suggestions(grouping::offline(&app.scope))?;
             }
-            app.status("Files stay in place.");
+            app.status("");
+            if options.scenario == "http-server" {
+                app.set_update(updates::PUBLIC_RELEASE_UNAVAILABLE);
+            }
             if options.scenario == "error" {
                 app.status(
                     "Folder unavailable. Choose another folder to keep organizing your files.",
@@ -519,7 +523,14 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
     }
     if msg == WM_CTLCOLORSTATIC {
         SetBkMode(wp as HDC, TRANSPARENT as _);
-        SetTextColor(wp as HDC, theme::rgb(43, 54, 69));
+        SetTextColor(
+            wp as HDC,
+            if GetDlgCtrlID(lp as HWND) == AI_TRANSPORT_NOTE as i32 {
+                theme::rgb(153, 89, 28)
+            } else {
+                theme::rgb(43, 54, 69)
+            },
+        );
         SetBkColor(wp as HDC, theme::rgb(255, 255, 255));
         return GetStockObject(WHITE_BRUSH) as LRESULT;
     }
@@ -541,6 +552,7 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
                 let id = word(wp); let notification = (wp >> 16) as u16;
                 if id == GROUPS && notification == LBN_SELCHANGE as u16 { app.group_selection(); return Some(0); }
                 if id == PROPOSALS && notification == LBN_SELCHANGE as u16 { app.proposal_selection(); return Some(0); }
+                if id == BASE && notification == EN_CHANGE as u16 { app.sync_ai_transport_note(); return Some(0); }
                 if ((id==ITEMS||id==AI_ITEMS)&&notification==LBN_SELCHANGE as u16)||(id==ROOT&&notification==EN_CHANGE as u16) {app.update_actions();return Some(0);}
                 if notification == BN_CLICKED as u16 { if let Err(e) = app.command(id) { app.error(e); } app.update_actions(); }
                 0
@@ -557,7 +569,7 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
             WM_CLOSE => { if app.tray_available { ShowWindow(hwnd, SW_HIDE); } else { app.status("Tray is unavailable. Use Save and quit to exit; settings remain accessible."); } 0 },
             RESTORE => { app.restore(); 0 },
             START => {
-                app.status("Add a folder to get started. Your files stay in place.");
+                app.status("");
                 app.register_tray();
                 if app.layout.settings.startup_update_check && let Err(e) = app.worker.submit(Job::Check) { app.set_update(&format!("Startup update check unavailable: {e}")); }
                 let journal=app.data.join("operation.json");
@@ -1061,6 +1073,25 @@ impl App {
     }
     unsafe fn status(&self, text: &str) {
         self.set(STATUS, text);
+        set_control_visible(self.c(STATUS), !text.is_empty());
+        let dpi = window_dpi(self.hwnd);
+        let rect = RECT {
+            left: scale(220, dpi) - self.main_scroll.x,
+            top: scale(686, dpi) - self.main_scroll.y,
+            right: scale(980, dpi) - self.main_scroll.x,
+            bottom: scale(750, dpi) - self.main_scroll.y,
+        };
+        InvalidateRect(self.hwnd, &rect, 0);
+    }
+    unsafe fn sync_ai_transport_note(&self) {
+        self.set(
+            AI_TRANSPORT_NOTE,
+            if ai::uses_http(&self.text(BASE)) {
+                "HTTP is unencrypted. Avoid public Wi-Fi."
+            } else {
+                ""
+            },
+        );
     }
     unsafe fn error(&self, error: anyhow::Error) {
         self.status(&format!("Error: {error:#}"));
@@ -1632,7 +1663,7 @@ impl App {
                 }
             }
             SAVE_SETTINGS => {
-                let base = self.text(BASE);
+                let base = self.text(BASE).trim().to_owned();
                 ai::endpoint(&base)?;
                 let model = self.text(MODEL);
                 ensure!(
@@ -1753,6 +1784,7 @@ impl App {
             return false;
         }
         match control.id {
+            STATUS => !unsafe { self.text(STATUS) }.is_empty(),
             ITEMS => self.page == 1 && !self.layout.items.is_empty(),
             PREVIEW_MOVES | APPLY_MOVES | MOVES => {
                 self.page == 2 && unsafe { self.checked(MOVE_OPT) }
@@ -1915,16 +1947,16 @@ impl App {
                         self.task = 0;
                     }
                     match result {
-                        Ok(Some(update)) => {
+                        Ok(updates::CheckStatus::Available(update)) => {
                             self.set_update(&format!("Version {} is available. Download and install will close and restart this application.",update.version));
                             self.status(&format!(
                                 "DesktopOrganizer {} is available in Settings / Updates.",
                                 update.version
                             ));
-                            self.available = Some(update);
+                            self.available = Some(*update);
                             self.notify_update();
                         }
-                        Ok(None) => {
+                        Ok(updates::CheckStatus::Current) => {
                             self.available = None;
                             self.set_update(
                                 "The installed version is up to date on the stable channel.",
@@ -1933,6 +1965,10 @@ impl App {
                         Err(e) => {
                             self.available = None;
                             self.set_update(&format!("Update check failed: {e:#}"));
+                        }
+                        Ok(updates::CheckStatus::PublicReleaseUnavailable) => {
+                            self.available = None;
+                            self.set_update(updates::PUBLIC_RELEASE_UNAVAILABLE);
                         }
                     }
                 }

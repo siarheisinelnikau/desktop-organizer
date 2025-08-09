@@ -6,14 +6,14 @@ Work stays in `E:/work/github/desktop-organizer`, with two Cargo jobs and a loca
 
 ## Automated checks
 
-Rust/Cargo 1.96.1: formatting, Clippy with warnings denied, **19 library tests**, optimized Windows x64 compilation and packaging passed. Tests cover grouping/selected-item preservation, folder refresh preserving manual assignments, metadata serialization privacy, malformed/unknown/duplicate model output, URL restrictions, DPAPI on a synthetic token, release selection, root/name validation, no-overwrite moves, changed content, collision/undo/recovery, atomic persistence, capture argument isolation and group tile hit testing.
+Rust/Cargo 1.96.1, DesktopOrganizer v0.1.1: formatting, Clippy with warnings denied, **22 library tests**, optimized Windows x64 compilation and packaging passed. Tests cover grouping/selected-item preservation, folder refresh preserving manual assignments, actual synthetic HTTP exchanges, metadata privacy, malformed/unknown/duplicate model output, URL restrictions, DPAPI on a synthetic token, missing-public-release classification, root/name validation, no-overwrite moves, changed content, collision/undo/recovery, atomic persistence, capture argument isolation and group tile hit testing.
 
 The executable is inspected without execution by `scripts/inspect_binary.py`: x64, Windows GUI subsystem, embedded `asInvoker` / `PerMonitorV2` / Common Controls v6 manifest, and no dynamic MSVC/UCRT dependency. The packaged checksum is in `dist/SHA256SUMS`.
 
 ```powershell
 ./scripts/check.ps1
 ./scripts/package.ps1
-python scripts/inspect_binary.py dist/DesktopOrganizer-v0.1.0.exe
+python scripts/inspect_binary.py dist/DesktopOrganizer-v0.1.1.exe
 ./scripts/capture.ps1
 git diff --check
 ```
@@ -28,20 +28,34 @@ Additional local captures reviewed empty/error states and a long filename at 125
 
 Source/configuration review: native Win32 controls and GDI CPU drawing, no wgpu/OpenGL/DirectX renderer. Normal dispatch sleeps in GetMessage. Save debounce is one-shot. Workers block in bounded queues; network and file work use separate workers. Paint does not self-invalidate. Hidden/minimized WM_PAINT validates its region without building/rasterizing a scene. Capture mode explicitly renders a finite offscreen frame and exits.
 
-Final bounded diagnostic: optimized `target/release/DesktopOrganizer.exe`, PID **28488**, six synthetic files, one second of settling followed by five seconds of sampling per state. This native diagnostic used no mouse/keyboard injection or computer-use API. See `diagnostics/runtime.json` for the original report.
+Final v0.1.1 bounded diagnostic: optimized `target/release/DesktopOrganizer.exe`, PID **14344**, six synthetic files, one second of settling followed by five seconds of sampling per state. This native diagnostic used no mouse/keyboard injection or computer-use API. See `diagnostics/runtime.json` for the original report.
 
 | State | Sample | CPU seconds | One-core CPU | Main/group rasters | Layouts / owner draws |
 | --- | --- | --- | --- | --- | --- |
-| Visible settled | 5.006 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
-| After navigation settled | 5.001 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
-| Hidden settled | 5.021 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
-| Restored settled | 5.013 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
+| Visible settled | 5.011 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
+| After navigation settled | 5.003 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
+| Hidden settled | 5.012 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
+| Restored settled | 5.012 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
 
-Thirty transitions through Tidy up → Settings → My groups used the production command dispatcher. They caused **zero shared control-font recreations**, **zero layout passes**, and **zero unexpected visible controls**, including refreshes while another page was selected. Main-scene painting did not reenter the command dispatcher; the longest command dispatch was **7.30 ms**. This measures native dispatch/visibility, not a compositor frame time or subjective flicker.
+Thirty transitions through Tidy up → Settings → My groups used the production command dispatcher. They caused **zero shared control-font recreations**, **zero layout passes**, and **zero unexpected visible controls**, including refreshes while another page was selected. Main-scene painting did not reenter the command dispatcher; the longest command dispatch was **8.92 ms**. This measures native dispatch/visibility, not a compositor frame time or subjective flicker.
 
 No sustained scene generation occurred in these settled windows. The native system-close path preserved the actual HWND and hid settings to tray; the production restore dispatcher made the window visible again. Tray registration succeeded outside the sandbox. The process exited normally after the bounded run. The earlier sandbox diagnostic could not register a tray icon, but kept settings accessible as designed.
 
 This passes the narrow native idle/hidden/restore check. It does **not** establish pointer/scroll latency, physical tray clicks, focus behavior during a real user action, all native-control internals, GPU/compositor timing or universal absence of stutter. GPU telemetry was not collected. Do not infer interaction performance from the PNGs or CPU sample.
+
+## HTTP and settings regression checks — v0.1.1
+
+The old URL validator rejected every HTTP host except loopback, including a server on another LAN computer. HTTP and HTTPS are now both accepted. Credentials/query/fragment and non-HTTP schemes remain rejected. The native provider panel changes its short warning on address edits without requiring confirmation or blocking Save settings.
+
+- A bounded `127.0.0.1` server receives the production network worker's POST at `/v1/chat/completions`, model and synthetic bearer token. Its response passes strict parsing, selected-group application and full layout validation. The actual request contains the selected filename without its private parent path.
+- HTTP 401, 404 and 429 produce actionable errors without the synthetic token or provider-body marker. HTTP 302 does not contact the redirect destination. HTTP 200 with malformed JSON or unknown item IDs fails validation.
+- Native text notifications show the HTTP warning and clear it for HTTPS. The production Save settings command persists an HTTP example URL, startup-check opt-out and a DPAPI-protected synthetic token into the diagnostic output directory. Reading the saved layout and decrypting that token verifies the round trip; the token input is cleared. No request is made to the example address or a real provider.
+- The GitHub plugin returned 404 for both the canonical repository and latest-release endpoint. A regression test distinguishes the pinned shared-core 404 result from current-version, malformed-response, timeout and rate-limit outcomes. The UI describes public releases as unavailable instead of displaying a raw HTTP error or claiming the installation is current.
+- Real application captures show the HTTP note, unavailable release state and navigation without another logo/product-name/version block. The ordinary idle status card is absent; meaningful action/error messages still have their own surface.
+
+The expanded settings panel was also inspected at 125% scale; the HTTP note, fields and actions fit without clipping. The packaged v0.1.1 executable (4,330,496 bytes) passed static PE inspection and resource-only icon rendering at native sizes. [Icon metadata](verification/icons-v0.1.1.json) records the package hash and embedded sizes; the artwork is unchanged. No helper or normal application instance was launched by these static artifact checks.
+
+The restricted sandbox denied loopback connections, so the complete 22-test suite ran successfully outside that sandbox with only the bounded synthetic server. This is transport/workflow evidence, not verification of the user's AI service, credentials, real tray input or end-to-end update installation.
 
 ## Repairs verified at the appropriate level
 
@@ -72,6 +86,8 @@ No repository/release publication was authorized. Complete the remaining interac
 
 
 ## Shared updater and icon audit — 2026-11-01
+
+This section records the earlier v0.1.0 baseline. The current v0.1.1 HTTP/settings and rendering evidence appears above.
 
 The portable executable now embeds the established four-tile artwork at 16, 20, 24, 32, 48, 64, 128 and 256 pixels. Main/group window classes use native large/small handles from `LoadIconMetric`; the tray uses the small handle. The previous code created only one runtime 32-pixel icon and supplied no Explorer EXE icon. `scripts/verify-icons.py` loads the optimized artifact as resource data, checks its group sizes, and draws each small icon with `LoadImageW`/`DrawIconEx` on light/dark backgrounds. [The inspected resource proof](screenshots/embedded-icons.png) is not an OS tray screenshot. [Resource metadata](verification/icons-2026-11-01.json) identifies the checked binary/hash.
 
