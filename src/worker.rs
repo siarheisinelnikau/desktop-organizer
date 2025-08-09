@@ -43,7 +43,7 @@ pub enum Event {
     Applied(Result<Plan>),
     Undone(Result<Plan>),
     Recovered(Result<Plan>),
-    Checked(Result<Option<updates::Available>>),
+    Checked(Result<updates::CheckStatus>),
     Progress(u64, u64),
     Downloaded(Result<updates::Prepared>),
     Installed(Result<()>),

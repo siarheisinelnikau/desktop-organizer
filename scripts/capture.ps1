@@ -25,7 +25,7 @@ try {
         $output = Join-Path $OutputDirectory "$name.png"
         $started = [DateTime]::UtcNow
         $arguments = @('--capture', ('"' + $output + '"'), '--screen', $screen, '--fixture-root', ('"' + $fixture + '"'))
-        if ($name -eq 'settings-ai') { $arguments += @('--scenario', 'ai-setup') }
+        if ($name -eq 'settings-ai') { $arguments += @('--scenario', 'http-server') }
         $process = Start-Process -FilePath $executable -WorkingDirectory $repository -ArgumentList $arguments -WindowStyle Hidden -PassThru
         if (!$process.WaitForExit(15000)) { Stop-Process -Id $process.Id; throw "Capture timed out: $screen" }
         if ($process.ExitCode -ne 0) { throw "Capture failed: $screen (exit $($process.ExitCode))" }

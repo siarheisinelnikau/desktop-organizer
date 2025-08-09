@@ -1,7 +1,7 @@
 {
   "backend": "CPU GDI / native controls",
   "dpi": 96,
-  "elapsed_ms": 21,
+  "elapsed_ms": 15,
   "group_rasters": 0,
   "layouts": 3,
   "main_rasters": 4,
@@ -10,7 +10,7 @@
     1000,
     760
   ],
-  "scenario": "ai-setup",
+  "scenario": "http-server",
   "scope": "client area, production Win32 controls and shared GDI renderer",
   "screen": "settings"
 }

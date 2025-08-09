@@ -17,8 +17,8 @@ struct Metadata<'a> {
     category: &'a str,
 }
 
-pub fn endpoint(base: &str) -> Result<Url> {
-    let mut url = Url::parse(base).context("Invalid AI base URL")?;
+fn base_url(base: &str) -> Result<Url> {
+    let url = Url::parse(base.trim()).context("Enter a valid AI server URL")?;
     ensure!(
         url.username().is_empty()
             && url.password().is_none()
@@ -26,11 +26,19 @@ pub fn endpoint(base: &str) -> Result<Url> {
             && url.fragment().is_none(),
         "AI URL must not contain credentials, query or fragment"
     );
-    let loopback = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
     ensure!(
-        url.scheme() == "https" || (url.scheme() == "http" && loopback),
-        "AI requires HTTPS, except loopback HTTP"
+        url.host().is_some() && matches!(url.scheme(), "http" | "https"),
+        "Use an HTTP or HTTPS address for the AI server."
     );
+    Ok(url)
+}
+
+pub fn uses_http(base: &str) -> bool {
+    Url::parse(base.trim()).is_ok_and(|url| url.scheme() == "http")
+}
+
+pub fn endpoint(base: &str) -> Result<Url> {
+    let mut url = base_url(base)?;
     url.set_path(&format!(
         "{}/chat/completions",
         url.path().trim_end_matches('/')
@@ -90,8 +98,13 @@ pub fn request(base: &str, model: &str, api_key: &str, items: &[Item]) -> Result
         req = req.header("Authorization", &format!("Bearer {api_key}"));
     }
     // Do not include provider response bodies, headers or tokens in errors.
-    let mut response = req.send_json(&payload).map_err(|_| {
-        anyhow::anyhow!("AI request failed. Check URL, model, token and provider availability.")
+    let mut response = req.send_json(&payload).map_err(|error| {
+        anyhow::anyhow!(match error {
+            ureq::Error::StatusCode(401 | 403) => "AI access was denied. Check the saved API token and model permissions.",
+            ureq::Error::StatusCode(404) => "AI endpoint was not found. Check the base URL; OpenAI-compatible servers usually use /v1.",
+            ureq::Error::StatusCode(429) => "The AI server is busy or its request limit was reached. Try again later.",
+            _ => "Could not get AI suggestions. Check the server address, model and connection.",
+        })
     })?;
     let value: Value = response
         .body_mut()
@@ -109,6 +122,182 @@ pub fn request(base: &str, model: &str, api_key: &str, items: &[Item]) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{
+        io::{Read, Write},
+        net::TcpListener,
+        thread,
+        time::Instant,
+    };
+
+    // One bounded synthetic HTTP exchange; never contacts a real provider.
+    fn server(status: &str, headers: &str, body: String) -> (String, thread::JoinHandle<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let base = format!("http://{}/v1/", listener.local_addr().unwrap());
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n{headers}\r\n{body}",
+            body.len()
+        );
+        let handle = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(e)
+                        if e.kind() == std::io::ErrorKind::WouldBlock
+                            && Instant::now() < deadline =>
+                    {
+                        thread::sleep(Duration::from_millis(5))
+                    }
+                    Err(e) => panic!("Synthetic HTTP server did not receive a request: {e}"),
+                }
+            };
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0; 4096];
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                assert!(count > 0 && bytes.len() < 256 * 1024);
+                bytes.extend_from_slice(&buffer[..count]);
+                if let Some(end) = bytes.windows(4).position(|w| w == b"\r\n\r\n") {
+                    let header = String::from_utf8_lossy(&bytes[..end]);
+                    let length: usize = header
+                        .lines()
+                        .find_map(|line| {
+                            let (name, value) = line.split_once(':')?;
+                            name.eq_ignore_ascii_case("content-length")
+                                .then(|| value.trim().parse().unwrap())
+                        })
+                        .unwrap();
+                    if bytes.len() >= end + 4 + length {
+                        break;
+                    }
+                }
+            }
+            stream.write_all(response.as_bytes()).unwrap();
+            String::from_utf8(bytes).unwrap()
+        });
+        (base, handle)
+    }
+
+    #[test]
+    fn http_request_through_worker_produces_applicable_groups_without_sending_paths() {
+        use crate::{
+            model::Layout,
+            worker::{Event, Job, Worker},
+        };
+        let mut layout = Layout::default();
+        let item = Item::from_path(
+            7,
+            std::env::current_dir()
+                .unwrap()
+                .join("private-source-marker/report.pdf"),
+            false,
+        );
+        layout.items.push(item.clone());
+        layout.groups[0].items.push(item.id);
+        layout.next_id = 8;
+        let body = json!({"choices":[{"message":{"content":r#"{"groups":[{"name":"Reports","item_ids":[7]}]}"#}}]}).to_string();
+        let (base, handle) = server("200 OK", "", body);
+        let worker = Worker::start(0, 0);
+        #[cfg(windows)]
+        let key = crate::platform::secrets::protect(b"synthetic-test-token").unwrap();
+        #[cfg(not(windows))]
+        let key = b"synthetic-test-token".to_vec();
+        worker
+            .submit(Job::Ai {
+                base,
+                model: "universal".into(),
+                key,
+                items: vec![item.clone()],
+            })
+            .unwrap();
+        let Event::Suggested(result) = worker
+            .receiver
+            .recv_timeout(Duration::from_secs(8))
+            .unwrap()
+        else {
+            panic!("Wrong worker event");
+        };
+        grouping::apply_selected(&mut layout, &result.unwrap(), &[item]).unwrap();
+        layout.validate().unwrap();
+        assert!(
+            layout
+                .groups
+                .iter()
+                .any(|group| group.name == "Reports" && group.items == [7])
+        );
+        let wire = handle.join().unwrap();
+        assert!(wire.starts_with("POST /v1/chat/completions HTTP/1.1\r\n"));
+        assert!(
+            wire.to_ascii_lowercase()
+                .contains("authorization: bearer synthetic-test-token")
+        );
+        assert!(!wire.contains("private-source-marker"));
+        let payload: Value = serde_json::from_str(wire.split_once("\r\n\r\n").unwrap().1).unwrap();
+        assert_eq!(payload["model"], "universal");
+        assert!(
+            payload["messages"][1]["content"]
+                .as_str()
+                .unwrap()
+                .contains("report.pdf")
+        );
+    }
+
+    #[test]
+    fn http_errors_are_actionable_and_do_not_expose_provider_body_or_token() {
+        for (status, expected) in [
+            ("401 Unauthorized", "access was denied"),
+            ("404 Not Found", "endpoint was not found"),
+            ("429 Too Many Requests", "request limit"),
+        ] {
+            let (base, handle) = server(status, "", "provider-private-body-marker".into());
+            let error = request(&base, "universal", "synthetic-test-token", &items())
+                .unwrap_err()
+                .to_string();
+            handle.join().unwrap();
+            assert!(error.contains(expected), "Unexpected error: {error}");
+            assert!(
+                !error.contains("provider-private-body-marker")
+                    && !error.contains("synthetic-test-token")
+            );
+        }
+    }
+
+    #[test]
+    fn http_redirect_does_not_forward_the_api_token() {
+        let target = TcpListener::bind("127.0.0.1:0").unwrap();
+        target.set_nonblocking(true).unwrap();
+        let location = format!(
+            "Location: http://{}/stolen\r\n",
+            target.local_addr().unwrap()
+        );
+        let (base, handle) = server("302 Found", &location, String::new());
+        assert!(request(&base, "universal", "synthetic-test-token", &items()).is_err());
+        handle.join().unwrap();
+        assert_eq!(
+            target.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
+    }
+
+    #[test]
+    fn successful_http_with_invalid_model_output_is_rejected() {
+        for content in [
+            "not JSON",
+            r#"{"groups":[{"name":"Reports","item_ids":[99]}]}"#,
+        ] {
+            let body = json!({"choices":[{"message":{"content":content}}]}).to_string();
+            let (base, handle) = server("200 OK", "", body);
+            assert!(request(&base, "universal", "", &items()).is_err());
+            handle.join().unwrap();
+        }
+    }
     fn items() -> Vec<Item> {
         vec![Item::from_path(7, "report.pdf".into(), false)]
     }
@@ -127,9 +316,23 @@ mod tests {
         assert!(parse_content(r#"{"groups":[{"name":"Docs","item_ids":[7]}]}"#, &items()).is_ok());
     }
     #[test]
-    fn remote_plaintext_and_url_credentials_are_rejected() {
-        assert!(endpoint("http://example.com/v1").is_err());
-        assert!(endpoint("https://secret@example.com/v1").is_err());
+    fn http_servers_are_allowed_and_unsafe_url_components_are_rejected() {
+        assert!(uses_http("http://192.168.100.99:8080/v1"));
+        assert!(!uses_http("https://example.com/v1"));
+        assert_eq!(
+            endpoint("http://192.168.100.99:8080/v1").unwrap().as_str(),
+            "http://192.168.100.99:8080/v1/chat/completions"
+        );
+        assert!(endpoint("http://example.com/v1").is_ok());
+        for base in [
+            "https://secret@example.com/v1",
+            "https://example.com/v1?token=secret",
+            "https://example.com/v1#fragment",
+            "file:///test",
+            "ftp://example.com/v1",
+        ] {
+            assert!(endpoint(base).is_err(), "Accepted {base}");
+        }
         assert_eq!(
             endpoint("http://localhost:8080/v1/").unwrap().as_str(),
             "http://localhost:8080/v1/chat/completions"
