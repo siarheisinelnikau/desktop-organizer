@@ -1,13 +1,47 @@
 //! Bounded native integration/load check. No input injection or desktop capture.
 use super::*;
 use std::time::{Duration, Instant};
+thread_local! { static MESSAGES: RefCell<std::collections::BTreeMap<(u8,u32),u64>> = const { RefCell::new(std::collections::BTreeMap::new()) }; }
+static WAITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub(super) fn note_message(source: u8, message: u32) {
+    MESSAGES.with(|messages| *messages.borrow_mut().entry((source, message)).or_default() += 1);
+}
+unsafe fn ui_cpu() -> Result<u64> {
+    unsafe {
+        let (mut creation, mut exit, mut kernel, mut user) = (
+            FILETIME::default(),
+            FILETIME::default(),
+            FILETIME::default(),
+            FILETIME::default(),
+        );
+        ensure!(
+            GetThreadTimes(
+                GetCurrentThread(),
+                &mut creation,
+                &mut exit,
+                &mut kernel,
+                &mut user
+            ) != 0,
+            "Cannot sample UI thread CPU"
+        );
+        Ok(
+            ((kernel.dwHighDateTime as u64) << 32 | kernel.dwLowDateTime as u64)
+                + ((user.dwHighDateTime as u64) << 32 | user.dwLowDateTime as u64),
+        )
+    }
+}
 
-fn counters() -> [u64; 4] {
+fn counters() -> [u64; 9] {
     [
         MAIN_PAINTS.load(Ordering::Relaxed),
         GROUP_PAINTS.load(Ordering::Relaxed),
         LAYOUTS.load(Ordering::Relaxed),
         OWNER_DRAWS.load(Ordering::Relaxed),
+        MAIN_PAINT_MESSAGES.load(Ordering::Relaxed),
+        MAIN_PRINT_MESSAGES.load(Ordering::Relaxed),
+        REFRESHES.load(Ordering::Relaxed),
+        STATUS_UPDATES.load(Ordering::Relaxed),
+        MAIN_BLITS.load(Ordering::Relaxed),
     ]
 }
 unsafe fn cpu() -> Result<u64> {
@@ -40,6 +74,7 @@ unsafe fn pump(duration: Duration) -> Result<()> {
         let mut msg: MSG = zeroed();
         while Instant::now() < end {
             while PeekMessageW(&mut msg, null_mut(), 0, 0, PM_REMOVE) != 0 {
+                note_message(1, msg.message);
                 ensure!(msg.message != WM_QUIT, "Unexpected quit during diagnostic");
                 TranslateMessage(&msg);
                 DispatchMessageW(&msg);
@@ -49,6 +84,7 @@ unsafe fn pump(duration: Duration) -> Result<()> {
                 .as_millis()
                 .min(1000) as u32;
             if timeout > 0 {
+                WAITS.fetch_add(1, Ordering::Relaxed);
                 MsgWaitForMultipleObjectsEx(0, null(), timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
             }
         }
@@ -61,9 +97,32 @@ unsafe fn sample(state: &str) -> Result<serde_json::Value> {
         let start = Instant::now();
         let before = counters();
         let cpu_before = cpu()?;
+        let ui_before = ui_cpu()?;
+        let waits_before = WAITS.load(Ordering::Relaxed);
+        let messages_before = MESSAGES.with(|messages| messages.borrow().clone());
         pump(Duration::from_secs(5))?;
         let seconds = start.elapsed().as_secs_f64();
         let cpu_seconds = (cpu()? - cpu_before) as f64 / 10_000_000.0;
+        let ui_seconds = (ui_cpu()? - ui_before) as f64 / 10_000_000.0;
+        let messages: std::collections::BTreeMap<_, _> = MESSAGES.with(|messages| {
+            messages
+                .borrow()
+                .iter()
+                .filter_map(|(key, count)| {
+                    let delta = count - messages_before.get(key).copied().unwrap_or(0);
+                    (delta > 0).then(|| {
+                        (
+                            format!(
+                                "{}:0x{:04x}",
+                                if key.0 == 0 { "main" } else { "queue" },
+                                key.1
+                            ),
+                            delta,
+                        )
+                    })
+                })
+                .collect()
+        });
         let delta: Vec<_> = counters()
             .into_iter()
             .zip(before)
@@ -71,9 +130,9 @@ unsafe fn sample(state: &str) -> Result<serde_json::Value> {
             .collect();
         Ok(
             serde_json::json!({"state":state,"seconds":seconds,"cpu_seconds":cpu_seconds,
-        "cpu_one_core_percent":100.0*cpu_seconds/seconds,
+        "cpu_one_core_percent":100.0*cpu_seconds/seconds,"ui_thread_cpu_seconds":ui_seconds,"ui_thread_one_core_percent":100.0*ui_seconds/seconds,"message_waits":WAITS.load(Ordering::Relaxed)-waits_before,"messages":messages,
         "cpu_machine_percent":100.0*cpu_seconds/seconds/std::thread::available_parallelism().map(|n|n.get()).unwrap_or(1) as f64,
-        "main_rasters":delta[0],"group_rasters":delta[1],"layouts":delta[2],"owner_draws":delta[3]}),
+        "main_rasters":delta[0],"group_rasters":delta[1],"layouts":delta[2],"owner_draws":delta[3],"wm_paint":delta[4],"wm_printclient":delta[5],"refreshes":delta[6],"status_updates":delta[7],"main_blits":delta[8]}),
         )
     }
 }
@@ -128,6 +187,125 @@ pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
         APP.with(|cell| {
             let mut borrow = cell.borrow_mut();
             let app = borrow.as_mut().unwrap();
+            app.layout.items.clear();
+            for group in &mut app.layout.groups {
+                group.items.clear();
+            }
+            let keep_group = app.layout.groups[0].id;
+            app.layout
+                .import(app.data.join("Previous folder/Keep.txt"), false, keep_group);
+            app.source_ids = None;
+            app.scope.clear();
+            app.set(JSON, "");
+            app.organize_after_scan = true;
+            app.refresh();
+        });
+        SendMessageW(hwnd, WM_COMMAND, PAGE_AI as usize, 0);
+        let empty_onboarding = APP.with(|cell| {
+            let borrow = cell.borrow();
+            let app = borrow.as_ref().unwrap();
+            GetWindowLongPtrW(app.c(ADD_DESKTOP), GWL_STYLE) as u32 & WS_VISIBLE != 0
+                && GetWindowLongPtrW(app.c(TIDY_ADD_FOLDER), GWL_STYLE) as u32 & WS_VISIBLE != 0
+                && GetWindowLongPtrW(app.c(AI_ITEMS), GWL_STYLE) as u32 & WS_VISIBLE == 0
+        });
+        SendMessageW(hwnd, WM_COMMAND, SCAN as usize, 0);
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            pump(Duration::from_millis(50))?;
+            if APP.with(|cell| cell.borrow().as_ref().unwrap().task == 0) {
+                break;
+            }
+            ensure!(Instant::now() < deadline, "Fixture import timed out");
+        }
+        let (imported, selected) = APP.with(|cell| {
+            let borrow = cell.borrow();
+            let app = borrow.as_ref().unwrap();
+            (
+                app.tidy_items.len(),
+                SendMessageW(app.c(AI_ITEMS), LB_GETSELCOUNT, 0, 0) as usize,
+            )
+        });
+        ensure!(
+            empty_onboarding && imported > 0 && selected == imported,
+            "Empty-to-import workflow regression"
+        );
+        SendMessageW(hwnd, WM_COMMAND, OFFLINE as usize, 0);
+        SendMessageW(hwnd, WM_COMMAND, PREVIEW_MOVES as usize, 0);
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            pump(Duration::from_millis(50))?;
+            if APP.with(|cell| cell.borrow().as_ref().unwrap().task == 0) {
+                break;
+            }
+            ensure!(Instant::now() < deadline, "Move preview timed out");
+        }
+        let file_review = APP.with(|cell| {
+            let borrow = cell.borrow();
+            let app = borrow.as_ref().unwrap();
+            app.page == 5
+                && app
+                    .plan
+                    .as_ref()
+                    .is_some_and(|plan| plan.moves.len() == imported)
+                && GetWindowLongPtrW(app.c(MOVES), GWL_STYLE) as u32 & WS_VISIBLE != 0
+        });
+        ensure!(file_review, "Desktop folder review regression");
+        SendMessageW(hwnd, WM_COMMAND, BACK_TO_PLAN as usize, 0);
+        SendMessageW(hwnd, WM_COMMAND, APPLY_VISUAL as usize, 0);
+        let offline_groups = APP.with(|cell| -> Result<usize> {
+            let borrow = cell.borrow();
+            let app = borrow.as_ref().unwrap();
+            app.layout.validate()?;
+            Ok(app.layout.groups.len())
+        })?;
+        let connection_states = APP.with(|cell| {
+            let mut borrow = cell.borrow_mut();
+            let app = borrow.as_mut().unwrap();
+            let revision = app.ai_revision;
+            app.ai_test_result(revision, Ok(()));
+            let connected = app.ai_connection == AiConnection::Connected
+                && GetWindowLongPtrW(app.c(AI_CONNECTION), GWLP_USERDATA) == 1;
+            app.ai_edited();
+            app.ai_test_result(revision, Ok(()));
+            let stale_ignored = app.ai_connection == AiConnection::NotTested;
+            app.ai_test_result(
+                app.ai_revision,
+                Err(anyhow::anyhow!("Synthetic connection failure")),
+            );
+            let failed = app.ai_connection == AiConnection::Failed;
+            app.set_ai_connection(AiConnection::NotTested, "AI not tested");
+            connected && stale_ignored && failed
+        });
+        ensure!(connection_states, "AI connection indication regression");
+        let mut group_toggle = true;
+        APP.with(|cell| {
+            let mut borrow = cell.borrow_mut();
+            let app = borrow.as_mut().unwrap();
+            app.hidden = true;
+            app.show_groups();
+        });
+        for visible in [true, false, true, false] {
+            SendMessageW(hwnd, WM_COMMAND, SHOW_GROUPS as usize, 0);
+            group_toggle &= APP.with(|cell| {
+                let borrow = cell.borrow();
+                let app = borrow.as_ref().unwrap();
+                app.windows
+                    .values()
+                    .all(|window| (IsWindowVisible(window.hwnd) != 0) == visible)
+                    && app.text(SHOW_GROUPS)
+                        == if visible {
+                            "Hide groups"
+                        } else {
+                            "Show groups"
+                        }
+            });
+        }
+        ensure!(group_toggle, "Show/hide groups toggle regression");
+        let workflow_check = serde_json::json!({"empty_onboarding":empty_onboarding,"fixture_items_imported":imported,"first_import_selected":selected,"file_review_opened_without_moving":file_review,"offline_groups_applied":offline_groups,"group_toggle_four_transitions":group_toggle,"connection_success_failure_and_stale_ui_states":connection_states,"connection_ui_scope":"synthetic completion events; actual probe transport is tested separately against loopback"});
+        SendMessageW(hwnd, WM_COMMAND, PAGE_LIBRARY as usize, 0);
+        APP.with(|cell| {
+            let mut borrow = cell.borrow_mut();
+            let app = borrow.as_mut().unwrap();
             app.status("");
             app.hidden = false;
             app.show_groups();
@@ -135,6 +313,16 @@ pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
         });
         ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         let visible = sample("visible settled")?;
+        let before_exposure = MAIN_PAINTS.load(Ordering::Relaxed);
+        for _ in 0..10 {
+            InvalidateRect(hwnd, null(), 0);
+            UpdateWindow(hwnd);
+        }
+        let exposure_rasters = MAIN_PAINTS.load(Ordering::Relaxed) - before_exposure;
+        ensure!(
+            exposure_rasters == 0,
+            "Unchanged main exposures rebuilt the scene"
+        );
         let fonts_before = FONT_CREATIONS.load(Ordering::Relaxed);
         let layouts_before = LAYOUTS.load(Ordering::Relaxed);
         let mut max_dispatch_ms = 0f64;
@@ -188,16 +376,29 @@ pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
         });
         let restored_visible = IsWindowVisible(hwnd) != 0;
         let restored = sample("restored settled")?;
+        let restored_followup = sample("restored follow-up")?;
+        let tray_removed = APP.with(|cell| {
+            let mut borrow = cell.borrow_mut();
+            let app = borrow.as_mut().unwrap();
+            if !app.tray_available {
+                return true;
+            }
+            let removed = app.tray(false).is_ok();
+            if removed {
+                app.tray_available = false;
+            }
+            removed
+        });
         let report = serde_json::json!({"pid":std::process::id(),"executable":std::env::current_exe()?,"profile":"release",
         "backend":"CPU GDI / native Win32 controls; no GPU renderer","fixture_items":APP.with(|c|c.borrow().as_ref().unwrap().layout.items.len()),
-        "tray_registered":tray_registered,"system_close_preserved_window":close_preserved_window,"system_close_hid_to_tray":close_hid_to_tray,
-        "restore_visible":restored_visible,"settings":settings_check,"navigation":transitions,"samples":[visible,after_navigation,hidden,restored],
+        "tray_registered":tray_registered,"tray_removed_before_exit":tray_removed,"system_close_preserved_window":close_preserved_window,"system_close_hid_to_tray":close_hid_to_tray,
+        "restore_visible":restored_visible,"settings":settings_check,"workflow":workflow_check,"unchanged_exposures":10,"unchanged_exposure_rasters":exposure_rasters,"navigation":transitions,"samples":[visible,after_navigation,hidden,restored,restored_followup],
         "gpu_telemetry":"not collected; compositor/driver timing is not certified",
         "scope":"isolated in-process integration and idle load; physical tray clicks and keyboard traversal not tested"});
         fs::create_dir_all(options.output.parent().context("Missing report parent")?)?;
         fs::write(&options.output, serde_json::to_vec_pretty(&report)?)?;
         ensure!(
-            close_preserved_window && restored_visible,
+            close_preserved_window && restored_visible && tray_removed,
             "Native close/restore regression"
         );
         ensure!(

@@ -1,5 +1,6 @@
 //! A restrained, local-first desktop interface. Native controls retain keyboard/UIA support.
 use super::*;
+use windows_sys::Win32::System::SystemServices::SS_ENDELLIPSIS;
 mod icons;
 mod lists;
 pub(super) use icons::{Glyph, draw_icon};
@@ -47,7 +48,10 @@ pub(super) unsafe fn draw_button(item: *const DRAWITEMSTRUCT) -> LRESULT {
         let id = item.CtlID as u16;
         let nav = matches!(id, PAGE_LIBRARY | PAGE_AI | PAGE_SETTINGS | QUIT);
         let selected = GetWindowLongPtrW(item.hwndItem, GWLP_USERDATA) != 0;
-        let primary = matches!(id, BROWSE | OFFLINE | APPLY_VISUAL | SAVE_SETTINGS);
+        let primary = matches!(
+            id,
+            BROWSE | ADD_DESKTOP | PREVIEW_MOVES | APPLY_MOVES | SAVE_SETTINGS
+        );
         let pressed = item.itemState & ODS_SELECTED != 0;
         let background = if nav {
             if selected || pressed {
@@ -90,14 +94,16 @@ pub(super) unsafe fn draw_button(item: *const DRAWITEMSTRUCT) -> LRESULT {
             PAGE_LIBRARY => Some(Glyph::Grid),
             PAGE_AI | OFFLINE | REQUEST_AI | AI_SETUP => Some(Glyph::Sparkle),
             PAGE_SETTINGS => Some(Glyph::Gear),
-            BROWSE => Some(Glyph::Folder),
+            BROWSE | ADD_DESKTOP | SCAN_DESKTOP | TIDY_ADD_FOLDER => Some(Glyph::Folder),
             SCAN => Some(Glyph::Refresh),
             NEW_GROUP => Some(Glyph::Plus),
             RENAME_GROUP | RENAME_PROPOSAL => Some(Glyph::Pencil),
             REMOVE | DELETE_GROUP => Some(Glyph::Remove),
-            ASSIGN | ASSIGN_PROPOSAL | APPLY_VISUAL => Some(Glyph::Arrow),
+            ASSIGN | ASSIGN_PROPOSAL | APPLY_VISUAL | PREVIEW_MOVES | BACK_TO_PLAN => {
+                Some(Glyph::Arrow)
+            }
             SHOW_GROUPS => Some(Glyph::Eye),
-            CHECK => Some(Glyph::Refresh),
+            CHECK | TEST_AI => Some(Glyph::Refresh),
             INSTALL => Some(Glyph::Download),
             SAVE_SETTINGS => Some(Glyph::Shield),
             QUIT => Some(Glyph::Power),
@@ -220,7 +226,7 @@ impl App {
                     }
                     BROWSE => (780, 128, 180, 40),
                     SCAN => (654, 128, 114, 40),
-                    GROUPS => (238, 286, 188, 264),
+                    GROUPS => (238, 286, 188, 236),
                     GROUP_NAME => (240, 536, 180, 32),
                     RENAME_GROUP => (240, 580, 180, 34),
                     NEW_GROUP => (240, 236, 180, 36),
@@ -231,14 +237,23 @@ impl App {
                     AI_ITEMS => (240, 150, 310, 264),
                     SELECT_ALL => (240, 426, 140, 36),
                     OFFLINE => (390, 426, 160, 36),
-                    APPLY_VISUAL => (590, 426, 370, 36),
-                    CONSENT => (240, 490, 520, 30),
-                    REQUEST_AI => (780, 486, 180, 36),
-                    MOVE_OPT => (240, 546, 720, 28),
-                    PREVIEW_MOVES => (240, 588, 186, 36),
-                    APPLY_MOVES => (438, 588, 260, 36),
-                    UNDO => (710, 588, 250, 36),
-                    MOVES => (240, 634, 720, 34),
+                    APPLY_VISUAL => (240, 588, 310, 36),
+                    CONSENT => (240, 482, 520, 28),
+                    REQUEST_AI => (780, 480, 180, 36),
+                    MOVE_OPT => {
+                        c.page = 9;
+                        (0, 0, 0, 0)
+                    }
+                    PREVIEW_MOVES => (590, 426, 370, 36),
+                    APPLY_MOVES => {
+                        c.page = 5;
+                        (700, 612, 260, 40)
+                    }
+                    UNDO => (240, 634, 310, 34),
+                    MOVES => {
+                        c.page = 5;
+                        (240, 150, 720, 440)
+                    }
                     FULLSCREEN => (240, 156, 460, 28),
                     ACCENT => (738, 174, 222, 36),
                     BASE => {
@@ -297,7 +312,7 @@ impl App {
             }
             for (id, text) in [
                 (PAGE_LIBRARY, "My groups"),
-                (PAGE_AI, "Tidy up"),
+                (PAGE_AI, "Organize"),
                 (PAGE_SETTINGS, "Settings"),
                 (SHOW_GROUPS, "Show groups"),
                 (BROWSE, "Add a folder"),
@@ -308,10 +323,10 @@ impl App {
                 (ASSIGN, "Add to group"),
                 (REMOVE, "Remove from list"),
                 (SELECT_ALL, "Select all"),
-                (OFFLINE, "Suggest groups"),
-                (APPLY_VISUAL, "Use these groups"),
+                (OFFLINE, "Suggest folders"),
+                (APPLY_VISUAL, "Use visual groups only"),
                 (REQUEST_AI, "Ask my AI"),
-                (PREVIEW_MOVES, "Review moves"),
+                (PREVIEW_MOVES, "Review file moves"),
                 (APPLY_MOVES, "Move files"),
                 (UNDO, "Undo moves"),
                 (CHECK, "Check updates"),
@@ -322,7 +337,7 @@ impl App {
                 self.set(id, text);
             }
             self.set(CONSENT, "Share selected names and file types with my AI");
-            self.set(MOVE_OPT, "Create folders too — review every move first");
+            self.set(MOVE_OPT, "Move originals into folders — review first");
             self.set(FULLSCREEN, "Hide groups while I use a fullscreen app");
             self.control(
                 FOLDER_NAME,
@@ -335,8 +350,8 @@ impl App {
             self.sync_folder_name();
             self.label(1, "Files stay right where they are.", (300, 160, 340, 22));
             self.label(1, "My files", (482, 234, 478, 26));
-            self.label(2, "Pick your files", (240, 116, 310, 24));
-            self.label(2, "Their new homes", (590, 116, 370, 24));
+            self.label(2, "Files and shortcuts", (240, 116, 310, 24));
+            self.label(2, "Suggested folders", (590, 116, 370, 24));
             self.control(
                 PROPOSALS,
                 2,
@@ -353,7 +368,31 @@ impl App {
                 "Add selected files here",
                 (590, 352, 370, 36),
             );
-            self.label(2, "Just a preview. You're in control.", (590, 396, 370, 22));
+            self.button(ADD_DESKTOP, 2, "Scan my Desktop", (240, 350, 310, 40));
+            self.button(
+                TIDY_ADD_FOLDER,
+                2,
+                "Choose another folder",
+                (240, 404, 310, 36),
+            );
+            self.button(SCAN_DESKTOP, 2, "Scan Desktop", (806, 26, 174, 40));
+            self.button(BACK_TO_PLAN, 5, "Back to folders", (240, 612, 200, 40));
+            self.label(5, "Original path → destination", (240, 116, 720, 24));
+            for id in [ADD_DESKTOP, TIDY_ADD_FOLDER, SCAN_DESKTOP, BACK_TO_PLAN] {
+                SetWindowLongPtrW(
+                    self.c(id),
+                    GWL_STYLE,
+                    (WS_CHILD | WS_TABSTOP | BS_OWNERDRAW as u32) as _,
+                );
+            }
+            self.control(
+                AI_TIDY_CONNECTION,
+                2,
+                w!("STATIC"),
+                "AI not tested · check it in Settings",
+                SS_ENDELLIPSIS,
+                (240, 514, 520, 24),
+            );
             self.label(3, "Look and feel", (240, 116, 600, 26));
             self.label(3, "Group opacity", (240, 192, 290, 24));
             self.control(
@@ -387,7 +426,21 @@ impl App {
                 0,
                 (660, 192, 60, 24),
             );
-            self.button(AI_SETUP, 3, "Connect AI", (772, 326, 188, 38));
+            self.button(AI_SETUP, 3, "AI settings", (772, 326, 188, 38));
+            self.button(TEST_AI, 3, "Save & test AI", (558, 454, 206, 36));
+            SetWindowLongPtrW(
+                self.c(TEST_AI),
+                GWL_STYLE,
+                (WS_CHILD | WS_TABSTOP | BS_OWNERDRAW as u32) as _,
+            );
+            self.control(
+                AI_CONNECTION,
+                3,
+                w!("STATIC"),
+                "AI not tested",
+                SS_ENDELLIPSIS,
+                (240, 464, 310, 24),
+            );
             self.label(3, "AI suggestions", (240, 254, 500, 26));
             self.label(4, "Base URL", (240, 298, 96, 24));
             self.control(
@@ -452,6 +505,8 @@ impl App {
             }
             SendMessageW(list, LB_SETCURSEL, 0, 0);
             self.proposal_selection();
+            self.update_actions();
+            InvalidateRect(self.hwnd, null(), 0);
             Ok(())
         }
     }
@@ -466,34 +521,76 @@ impl App {
             }
         }
     }
-    pub(super) unsafe fn paint_main(&self) {
+    pub(super) unsafe fn paint_main(&mut self) {
         unsafe {
             let mut ps: PAINTSTRUCT = zeroed();
             let dc = BeginPaint(self.hwnd, &mut ps);
             if IsWindowVisible(self.hwnd) != 0 && IsIconic(self.hwnd) == 0 {
-                let mut rect = RECT::default();
-                GetClientRect(self.hwnd, &mut rect);
-                let buffer = CreateCompatibleDC(dc);
-                let bitmap = CreateCompatibleBitmap(dc, rect.right.max(1), rect.bottom.max(1));
-                if !buffer.is_null() && !bitmap.is_null() {
-                    let old = SelectObject(buffer, bitmap);
-                    self.render_main(buffer);
-                    BitBlt(dc, 0, 0, rect.right, rect.bottom, buffer, 0, 0, SRCCOPY);
-                    SelectObject(buffer, old);
-                } else {
-                    self.render_main(dc);
-                }
-                if !bitmap.is_null() {
-                    DeleteObject(bitmap);
-                }
-                if !buffer.is_null() {
-                    DeleteDC(buffer);
-                }
+                self.render_main(dc);
             }
             EndPaint(self.hwnd, &ps);
         }
     }
-    pub(super) unsafe fn render_main(&self, dc: HDC) {
+    pub(super) unsafe fn render_main(&mut self, output: HDC) {
+        unsafe {
+            let mut rect = RECT::default();
+            GetClientRect(self.hwnd, &mut rect);
+            let key = MainSceneKey {
+                page: self.page,
+                dpi: window_dpi(self.hwnd),
+                width: rect.right.max(1),
+                height: rect.bottom.max(1),
+                scroll_x: self.main_scroll.x,
+                scroll_y: self.main_scroll.y,
+                state: (self.layout.items.is_empty() as u8)
+                    | ((self.tidy_items.is_empty() as u8) << 1)
+                    | ((self.ai_setup_open as u8) << 2)
+                    | (((GetWindowTextLengthW(self.c(JSON)) > 0) as u8) << 3)
+                    | (((GetWindowTextLengthW(self.c(STATUS)) > 0) as u8) << 4),
+            };
+            if self
+                .main_surface
+                .as_ref()
+                .is_none_or(|surface| surface.key != key)
+            {
+                let reusable = self.main_surface.take().filter(|surface| {
+                    surface.key.width == key.width && surface.key.height == key.height
+                });
+                let mut surface = if let Some(surface) = reusable {
+                    surface
+                } else {
+                    let dc = CreateCompatibleDC(output);
+                    let bitmap = CreateCompatibleBitmap(output, key.width, key.height);
+                    if dc.is_null() || bitmap.is_null() {
+                        if !dc.is_null() {
+                            DeleteDC(dc);
+                        }
+                        if !bitmap.is_null() {
+                            DeleteObject(bitmap);
+                        }
+                        self.render_main_scene(output);
+                        return;
+                    }
+                    let previous = SelectObject(dc, bitmap);
+                    MainSurface {
+                        dc,
+                        bitmap,
+                        previous,
+                        key,
+                    }
+                };
+                self.render_main_scene(surface.dc);
+                surface.key = key;
+                self.main_surface = Some(surface);
+            }
+            let surface = self.main_surface.as_ref().unwrap();
+            BitBlt(
+                output, 0, 0, key.width, key.height, surface.dc, 0, 0, SRCCOPY,
+            );
+            MAIN_BLITS.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    unsafe fn render_main_scene(&self, dc: HDC) {
         unsafe {
             MAIN_PAINTS.fetch_add(1, Ordering::Relaxed);
             let mut client = RECT::default();
@@ -520,8 +617,12 @@ impl App {
             let (title, subtitle) = match self.page {
                 1 => ("Your space", "Give everyday files a home."),
                 2 => (
-                    "Let’s tidy up",
-                    "Pick files. Preview groups. Make it yours.",
+                    "Organize your Desktop",
+                    "See a plan first. Move files only when you confirm.",
+                ),
+                5 => (
+                    "Review file moves",
+                    "Check every destination before moving the originals.",
                 ),
                 _ => ("Make it yours", "A few small preferences."),
             };
@@ -533,11 +634,13 @@ impl App {
                     (220, 220, 220, 450),
                     (462, 220, 518, 450),
                 ],
+                2 if self.tidy_items.is_empty() => &[(220, 104, 350, 360), (574, 104, 406, 360)],
                 2 => &[
                     (220, 104, 350, 360),
                     (574, 104, 406, 360),
                     (220, 470, 760, 200),
                 ],
+                5 => &[(220, 104, 760, 566)],
                 _ => &[
                     (220, 104, 760, 128),
                     (220, 242, 760, 212),
@@ -552,6 +655,89 @@ impl App {
                     rgb(228, 233, 241),
                     14,
                 );
+            }
+            if self.page == 2 {
+                if self.tidy_items.is_empty() {
+                    draw_icon(
+                        dc,
+                        Glyph::Folder,
+                        rect(356, 166, 1, 1).left,
+                        rect(356, 166, 1, 1).top,
+                        scale(56, dpi),
+                        BLUE,
+                    );
+                    heading(
+                        dc,
+                        "Start with your Desktop",
+                        rect(240, 248, 310, 30),
+                        19,
+                        INK,
+                        true,
+                        dpi,
+                    );
+                    heading(
+                        dc,
+                        "Use the files already on your Desktop. Existing folders stay in place.",
+                        rect(240, 288, 310, 54),
+                        15,
+                        MUTED,
+                        false,
+                        dpi,
+                    );
+                }
+                if self.text(JSON).is_empty() {
+                    draw_icon(
+                        dc,
+                        Glyph::Sparkle,
+                        rect(730, 178, 1, 1).left,
+                        rect(730, 178, 1, 1).top,
+                        scale(44, dpi),
+                        BLUE,
+                    );
+                    heading(
+                        dc,
+                        "Your folder plan starts here",
+                        rect(594, 254, 346, 30),
+                        19,
+                        INK,
+                        true,
+                        dpi,
+                    );
+                    heading(
+                        dc,
+                        if self.tidy_items.is_empty() {
+                            "Scan your Desktop to see proposed folders and their files. Nothing moves yet."
+                        } else {
+                            "Choose Suggest folders or Ask my AI to preview folders for these files."
+                        },
+                        rect(594, 296, 346, 74),
+                        15,
+                        MUTED,
+                        false,
+                        dpi,
+                    );
+                } else {
+                    heading(
+                        dc,
+                        "Just a preview. You're in control.",
+                        rect(590, 396, 370, 22),
+                        14,
+                        MUTED,
+                        false,
+                        dpi,
+                    );
+                }
+                if !self.tidy_items.is_empty() {
+                    heading(
+                        dc,
+                        "Prefer floating groups? This keeps all original files where they are.",
+                        rect(566, 588, 394, 60),
+                        15,
+                        MUTED,
+                        false,
+                        dpi,
+                    );
+                }
             }
             if self.page == 1 && self.layout.items.is_empty() {
                 // The empty list is intentionally hidden below, so this is the actual empty-state surface.

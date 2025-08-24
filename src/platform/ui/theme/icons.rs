@@ -28,6 +28,7 @@ pub(super) fn category(name: &str) -> Glyph {
         "Code" => Glyph::Code,
         "Folders" => Glyph::Folder,
         "Archives" => Glyph::Archive,
+        "Applications" => Glyph::Grid,
         _ => Glyph::File,
     }
 }

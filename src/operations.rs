@@ -447,6 +447,44 @@ fn move_verified(source: &Path, destination: &Path, expected: &Fingerprint) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn moving_a_shortcut_moves_only_the_reference_and_undo_restores_it() {
+        fs::create_dir_all(".test-output").unwrap();
+        let temp =
+            tempfile::tempdir_in(std::env::current_dir().unwrap().join(".test-output")).unwrap();
+        let root = temp.path().join("source");
+        fs::create_dir(&root).unwrap();
+        let target = temp.path().join("target.txt");
+        fs::write(&target, b"target-content-unchanged").unwrap();
+        let link = root.join("Open target.url");
+        let contents = format!(
+            "[InternetShortcut]\r\nURL=file:///{}\r\n",
+            target.to_string_lossy().replace('\\', "/")
+        );
+        fs::write(&link, &contents).unwrap();
+        let item = Item::from_path(7, link.clone(), false);
+        assert_eq!(item.kind, "shortcut");
+        let mut plan = preview(
+            &root,
+            &[item],
+            &[Suggestion {
+                name: "Work".into(),
+                item_ids: vec![7],
+            }],
+        )
+        .unwrap();
+        let journal = temp.path().join("operation.json");
+        plan.apply(&journal).unwrap();
+        assert!(!link.exists());
+        assert_eq!(
+            fs::read_to_string(root.join("Work/Open target.url")).unwrap(),
+            contents
+        );
+        assert_eq!(fs::read(&target).unwrap(), b"target-content-unchanged");
+        plan.undo(&journal).unwrap();
+        assert_eq!(fs::read_to_string(link).unwrap(), contents);
+        assert_eq!(fs::read(&target).unwrap(), b"target-content-unchanged");
+    }
     fn fixture() -> (tempfile::TempDir, Vec<Item>, Vec<Suggestion>) {
         fs::create_dir_all(".test-output").unwrap();
         let temp =

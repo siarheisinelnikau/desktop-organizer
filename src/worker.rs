@@ -26,6 +26,12 @@ pub enum Job {
         key: Vec<u8>,
         items: Vec<Item>,
     },
+    TestAi {
+        revision: u64,
+        base: String,
+        model: String,
+        key: Vec<u8>,
+    },
     Preview(PathBuf, Vec<Item>, Vec<grouping::Suggestion>),
     Apply(Plan, PathBuf),
     Undo(PathBuf),
@@ -39,6 +45,7 @@ pub enum Event {
     Scanned(Result<Vec<(PathBuf, bool)>>),
     Imported(u64, Result<Vec<(PathBuf, bool)>>),
     Suggested(Result<Vec<grouping::Suggestion>>),
+    AiTested(u64, Result<()>),
     Previewed(Result<Plan>),
     Applied(Result<Plan>),
     Undone(Result<Plan>),
@@ -102,22 +109,22 @@ impl Worker {
                                 key,
                                 items,
                             } => {
-                                let result = (|| {
-                                    #[cfg(windows)]
-                                    let mut plaintext = crate::platform::secrets::unprotect(&key)?;
-                                    #[cfg(not(windows))]
-                                    let mut plaintext = key;
-                                    let result = ai::request(
-                                        &base,
-                                        &model,
-                                        std::str::from_utf8(&plaintext)?,
-                                        &items,
-                                    );
-                                    plaintext.fill(0);
-                                    result
-                                })();
+                                let result = with_api_key(key, |token| {
+                                    ai::request(&base, &model, token, &items)
+                                });
                                 Event::Suggested(result)
                             }
+                            Job::TestAi {
+                                revision,
+                                base,
+                                model,
+                                key,
+                            } => Event::AiTested(
+                                revision,
+                                with_api_key(key, |token| {
+                                    ai::test_connection(&base, &model, token)
+                                }),
+                            ),
                             Job::Preview(root, items, groups) => {
                                 Event::Previewed(operations::preview(&root, &items, &groups))
                             }
@@ -160,7 +167,10 @@ impl Worker {
         }
     }
     pub fn submit(&self, job: Job) -> Result<()> {
-        let sender = if matches!(job, Job::Ai { .. } | Job::Check | Job::Download(..)) {
+        let sender = if matches!(
+            job,
+            Job::Ai { .. } | Job::TestAi { .. } | Job::Check | Job::Download(..)
+        ) {
             &self.network
         } else {
             &self.sender
@@ -169,6 +179,18 @@ impl Worker {
             anyhow::anyhow!("Background queue is full or unavailable; retry after the current task")
         })
     }
+}
+
+fn with_api_key<T>(key: Vec<u8>, use_key: impl FnOnce(&str) -> Result<T>) -> Result<T> {
+    #[cfg(windows)]
+    let mut plaintext = crate::platform::secrets::unprotect(&key)?;
+    #[cfg(not(windows))]
+    let mut plaintext = key;
+    let result = std::str::from_utf8(&plaintext)
+        .map_err(anyhow::Error::from)
+        .and_then(use_key);
+    plaintext.fill(0);
+    result
 }
 impl Drop for Worker {
     fn drop(&mut self) {

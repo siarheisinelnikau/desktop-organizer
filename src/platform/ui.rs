@@ -11,7 +11,7 @@ use crate::{
 use anyhow::{Context, Result, ensure};
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ffi::OsStr,
     fs,
     mem::{size_of, zeroed},
@@ -48,6 +48,13 @@ const FOLDER_NAME: u16 = 185;
 const OPACITY_SLIDER: u16 = 186;
 const OPACITY_VALUE: u16 = 187;
 const AI_TRANSPORT_NOTE: u16 = 188;
+const TEST_AI: u16 = 189;
+const AI_CONNECTION: u16 = 190;
+const ADD_DESKTOP: u16 = 191;
+const TIDY_ADD_FOLDER: u16 = 192;
+const AI_TIDY_CONNECTION: u16 = 193;
+const SCAN_DESKTOP: u16 = 194;
+const BACK_TO_PLAN: u16 = 195;
 // TBM_GETPOS is WM_USER + 0; the pinned metadata omits this alias.
 const TBM_GETPOS: u32 = WM_USER;
 
@@ -126,6 +133,38 @@ struct Drag {
     origin: POINT,
     moved: bool,
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AiConnection {
+    NotTested,
+    Checking,
+    Connected,
+    Failed,
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct MainSceneKey {
+    page: u8,
+    dpi: u32,
+    width: i32,
+    height: i32,
+    scroll_x: i32,
+    scroll_y: i32,
+    state: u8,
+}
+struct MainSurface {
+    dc: HDC,
+    bitmap: HBITMAP,
+    previous: HGDIOBJ,
+    key: MainSceneKey,
+}
+impl Drop for MainSurface {
+    fn drop(&mut self) {
+        unsafe {
+            SelectObject(self.dc, self.previous);
+            DeleteObject(self.bitmap);
+            DeleteDC(self.dc);
+        }
+    }
+}
 struct App {
     hwnd: HWND,
     layout: Layout,
@@ -155,6 +194,12 @@ struct App {
     tray_available: bool,
     hooks: Vec<HWINEVENTHOOK>,
     ai_setup_open: bool,
+    ai_connection: AiConnection,
+    ai_revision: u64,
+    tidy_items: Vec<u64>,
+    source_ids: Option<HashSet<u64>>,
+    organize_after_scan: bool,
+    main_surface: Option<MainSurface>,
 }
 static CAPTURE_DPI: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 static MAIN_PAINTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -163,6 +208,11 @@ static LAYOUTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new
 static OWNER_DRAWS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static FONT_CREATIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static PAGE_SWITCHES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static MAIN_PAINT_MESSAGES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static MAIN_PRINT_MESSAGES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static REFRESHES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static STATUS_UPDATES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static MAIN_BLITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 fn window_dpi(hwnd: HWND) -> u32 {
     let override_dpi = CAPTURE_DPI.load(Ordering::Relaxed);
     if override_dpi > 0 {
@@ -323,7 +373,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         worker: Worker::start(hwnd as usize, WORK),
         controls: vec![],
         windows: HashMap::new(),
-        page: 1,
+        page: 2,
         font: null_mut(),
         font_dpi: 0,
         icon,
@@ -334,7 +384,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         plan_json: String::new(),
         available: None,
         drag: None,
-        hidden: diagnostic.is_some(),
+        hidden: true,
         fullscreen: false,
         save_sequence: 0,
         quitting: None,
@@ -345,6 +395,16 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         tray_available: false,
         hooks: vec![],
         ai_setup_open: false,
+        ai_connection: AiConnection::NotTested,
+        ai_revision: 0,
+        tidy_items: vec![],
+        source_ids: if diagnostic.is_some() {
+            None
+        } else {
+            Some(HashSet::new())
+        },
+        organize_after_scan: false,
+        main_surface: None,
     };
     APP.with(|cell| {
         *cell.borrow_mut() = Some(app);
@@ -365,9 +425,29 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
                 app.set(AI_SETUP, "Done");
             }
             app.position_controls();
-            app.scope = app.layout.items.clone();
-            if !app.scope.is_empty() {
+            app.scope = app
+                .layout
+                .items
+                .iter()
+                .filter(|item| app.tidy_items.contains(&item.id))
+                .cloned()
+                .collect();
+            if app.page == 2 {
+                SendMessageW(app.c(AI_ITEMS), LB_SETSEL, 1, -1);
+            }
+            if !app.scope.is_empty() && options.scenario != "no-preview" {
                 app.set_suggestions(grouping::offline(&app.scope))?;
+            }
+            if options.screen == "moves" {
+                let groups = grouping::offline(&app.scope);
+                app.show_move_preview(crate::operations::preview(
+                    &app.layout.settings.root,
+                    &app.scope,
+                    &groups,
+                )?);
+            }
+            if options.scenario == "ai-connected" {
+                app.ai_test_result(app.ai_revision, Ok(()));
             }
             app.status("");
             if options.scenario == "http-server" {
@@ -412,6 +492,9 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         };
         APP.with(|cell| {
             if let Some(app) = cell.borrow_mut().take() {
+                if app.tray_available {
+                    let _ = app.tray(false);
+                }
                 for window in app.windows.values() {
                     DestroyWindow(window.hwnd);
                 }
@@ -511,6 +594,9 @@ unsafe extern "system" fn foreground_event(
     }
 }
 unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    if CAPTURE_DPI.load(Ordering::Relaxed) > 0 {
+        diagnostic::note_message(0, msg);
+    }
     if msg == WM_DRAWITEM {
         return theme::draw_control(lp as *const DRAWITEMSTRUCT);
     }
@@ -525,12 +611,26 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
         SetBkMode(wp as HDC, TRANSPARENT as _);
         SetTextColor(
             wp as HDC,
-            if GetDlgCtrlID(lp as HWND) == AI_TRANSPORT_NOTE as i32 {
+            if matches!(
+                GetDlgCtrlID(lp as HWND) as u16,
+                AI_CONNECTION | AI_TIDY_CONNECTION
+            ) {
+                match GetWindowLongPtrW(lp as HWND, GWLP_USERDATA) {
+                    1 => theme::rgb(26, 124, 90),
+                    2 => theme::rgb(153, 89, 28),
+                    _ => theme::rgb(82, 102, 150),
+                }
+            } else if GetDlgCtrlID(lp as HWND) == AI_TRANSPORT_NOTE as i32 {
                 theme::rgb(153, 89, 28)
             } else {
                 theme::rgb(43, 54, 69)
             },
         );
+        if GetDlgCtrlID(lp as HWND) == AI_CONNECTION as i32 {
+            SetBkColor(wp as HDC, theme::rgb(249, 250, 253));
+            SetDCBrushColor(wp as HDC, theme::rgb(249, 250, 253));
+            return GetStockObject(DC_BRUSH) as LRESULT;
+        }
         SetBkColor(wp as HDC, theme::rgb(255, 255, 255));
         return GetStockObject(WHITE_BRUSH) as LRESULT;
     }
@@ -552,14 +652,15 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
                 let id = word(wp); let notification = (wp >> 16) as u16;
                 if id == GROUPS && notification == LBN_SELCHANGE as u16 { app.group_selection(); return Some(0); }
                 if id == PROPOSALS && notification == LBN_SELCHANGE as u16 { app.proposal_selection(); return Some(0); }
-                if id == BASE && notification == EN_CHANGE as u16 { app.sync_ai_transport_note(); return Some(0); }
+                if matches!(id,BASE|MODEL|KEY) && notification == EN_CHANGE as u16 { app.ai_edited(); app.sync_ai_transport_note(); return Some(0); }
+                if id == CLEAR_KEY && notification == BN_CLICKED as u16 { app.ai_edited(); app.update_actions(); return Some(0); }
                 if ((id==ITEMS||id==AI_ITEMS)&&notification==LBN_SELCHANGE as u16)||(id==ROOT&&notification==EN_CHANGE as u16) {app.update_actions();return Some(0);}
                 if notification == BN_CLICKED as u16 { if let Err(e) = app.command(id) { app.error(e); } app.update_actions(); }
                 0
             },
             WM_SIZE => { app.position_controls(); 0 },
-            WM_PAINT => { app.paint_main(); 0 },
-            WM_PRINTCLIENT => { app.render_main(wp as HDC); 0 },
+            WM_PAINT => { MAIN_PAINT_MESSAGES.fetch_add(1,Ordering::Relaxed); app.paint_main(); 0 },
+            WM_PRINTCLIENT => { MAIN_PRINT_MESSAGES.fetch_add(1,Ordering::Relaxed); app.render_main(wp as HDC); 0 },
             WM_ERASEBKGND => 1,
             WM_GETMINMAXINFO => { let info = &mut *(lp as *mut MINMAXINFO); info.ptMinTrackSize = POINT { x: scale(640, window_dpi(hwnd)), y: scale(420, window_dpi(hwnd)) }; 0 },
             WM_HSCROLL if lp==app.c(OPACITY_SLIDER)as isize => {let value=SendMessageW(app.c(OPACITY_SLIDER),TBM_GETPOS,0,0);app.set(OPACITY_VALUE,&format!("{value}%"));0},
@@ -698,6 +799,7 @@ unsafe extern "system" fn group_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARA
             }
             WM_LBUTTONDOWN => {
                 if let Some(item) = app.hit_item(id, lp) {
+                    SetFocus(hwnd);
                     if let Some(window) = app.windows.get_mut(&id) {
                         window.selected = Some(item);
                     }
@@ -742,10 +844,22 @@ unsafe extern "system" fn group_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARA
                         .iter()
                         .find_map(|(id, w)| (w.hwnd == target).then_some(*id));
                     if let Some(target_id) = target_id {
-                        app.layout.assign(drag.item, target_id);
-                        app.refresh();
-                        app.invalidate_groups();
-                        app.changed();
+                        ScreenToClient(target, &mut point);
+                        let before = app.hit_item_at(target_id, point.x, point.y);
+                        if app.layout.place_item(drag.item, target_id, before) {
+                            for (group_id, window) in &mut app.windows {
+                                if *group_id == target_id {
+                                    window.selected = Some(drag.item);
+                                } else if window.selected == Some(drag.item) {
+                                    window.selected = None;
+                                }
+                            }
+                            SetFocus(target);
+                            app.refresh();
+                            app.invalidate_groups();
+                            app.changed();
+                            app.status("Item arranged. Original files stay in place.");
+                        }
                     }
                 }
                 0
@@ -772,6 +886,12 @@ unsafe extern "system" fn group_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARA
                 {
                     app.remove_items(&[item]);
                 }
+                0
+            }
+            WM_SYSKEYDOWN
+                if matches!(wp as u16, VK_UP | VK_DOWN) && GetKeyState(VK_MENU as i32) < 0 =>
+            {
+                app.shift_selected_item(id, if wp == VK_UP as usize { -1 } else { 1 });
                 0
             }
             WM_CONTEXTMENU | WM_NCRBUTTONUP => {
@@ -1072,6 +1192,7 @@ impl App {
         SendMessageW(self.c(id), BM_GETCHECK, 0, 0) == BST_CHECKED as isize
     }
     unsafe fn status(&self, text: &str) {
+        STATUS_UPDATES.fetch_add(1, Ordering::Relaxed);
         self.set(STATUS, text);
         set_control_visible(self.c(STATUS), !text.is_empty());
         let dpi = window_dpi(self.hwnd);
@@ -1092,6 +1213,31 @@ impl App {
                 ""
             },
         );
+    }
+    unsafe fn ai_edited(&mut self) {
+        self.ai_revision += 1;
+        self.set_ai_connection(AiConnection::NotTested, "AI settings changed · not tested");
+    }
+    unsafe fn set_ai_connection(&mut self, state: AiConnection, text: &str) {
+        self.ai_connection = state;
+        for id in [AI_CONNECTION, AI_TIDY_CONNECTION] {
+            SetWindowLongPtrW(
+                self.c(id),
+                GWLP_USERDATA,
+                match state {
+                    AiConnection::Connected => 1,
+                    AiConnection::Failed => 2,
+                    _ => 0,
+                },
+            );
+            self.set(id, text);
+        }
+    }
+    unsafe fn ai_settings_dirty(&self) -> bool {
+        self.text(BASE).trim() != self.layout.settings.ai_base_url
+            || self.text(MODEL).trim() != self.layout.settings.ai_model
+            || !self.text(KEY).is_empty()
+            || self.checked(CLEAR_KEY)
     }
     unsafe fn error(&self, error: anyhow::Error) {
         self.status(&format!("Error: {error:#}"));
@@ -1295,10 +1441,35 @@ impl App {
             SendMessageW(list, LB_GETSELITEMS, rows.len(), rows.as_mut_ptr() as _).max(0) as usize;
         rows[..n]
             .iter()
-            .filter_map(|row| self.layout.items.get(*row as usize).cloned())
+            .filter_map(|row| {
+                if id == AI_ITEMS {
+                    self.tidy_items
+                        .get(*row as usize)
+                        .and_then(|id| self.layout.items.iter().find(|item| item.id == *id))
+                        .cloned()
+                } else {
+                    self.layout.items.get(*row as usize).cloned()
+                }
+            })
             .collect()
     }
     unsafe fn refresh(&mut self) {
+        REFRESHES.fetch_add(1, Ordering::Relaxed);
+        self.tidy_items = self
+            .layout
+            .items
+            .iter()
+            .filter(|item| {
+                item.kind != "folder"
+                    && (self.layout.settings.root.as_os_str().is_empty()
+                        || item.path.parent() == Some(self.layout.settings.root.as_path()))
+                    && self
+                        .source_ids
+                        .as_ref()
+                        .is_none_or(|ids| ids.contains(&item.id))
+            })
+            .map(|item| item.id)
+            .collect();
         let selected = self.selected_group();
         let groups = self.c(GROUPS);
         SendMessageW(groups, LB_RESETCONTENT, 0, 0);
@@ -1324,6 +1495,9 @@ impl App {
             }
             SendMessageW(list, LB_RESETCONTENT, 0, 0);
             for item in &self.layout.items {
+                if list_id == AI_ITEMS && !self.tidy_items.contains(&item.id) {
+                    continue;
+                }
                 let group = self
                     .layout
                     .groups
@@ -1358,6 +1532,12 @@ impl App {
         }
         self.group_selection();
         self.update_actions();
+        RedrawWindow(
+            self.hwnd,
+            null(),
+            null_mut(),
+            RDW_INVALIDATE | RDW_ALLCHILDREN,
+        );
         for (id, w) in &self.windows {
             if let Some(g) = self.layout.groups.iter().find(|g| g.id == *id) {
                 SetWindowTextW(
@@ -1397,7 +1577,7 @@ impl App {
                     if self.ai_setup_open {
                         "Done"
                     } else {
-                        "Connect AI"
+                        "AI settings"
                     },
                 );
                 self.position_controls();
@@ -1416,8 +1596,21 @@ impl App {
                 self.switch_page((id - 100) as u8);
                 return Ok(());
             }
-            SHOW_GROUPS | TRAY_SHOW => {
+            BACK_TO_PLAN => {
+                self.switch_page(2);
+                return Ok(());
+            }
+            SHOW_GROUPS => {
+                self.hidden = !(self.hidden || self.fullscreen);
+                if !self.hidden {
+                    self.fullscreen = false;
+                }
+                self.show_groups();
+                return Ok(());
+            }
+            TRAY_SHOW => {
                 self.hidden = false;
+                self.fullscreen = false;
                 self.show_groups();
                 return Ok(());
             }
@@ -1443,6 +1636,12 @@ impl App {
             }
             SELECT_ALL => {
                 SendMessageW(self.c(AI_ITEMS), LB_SETSEL, 1, -1);
+                self.update_actions();
+                return Ok(());
+            }
+            MOVE_OPT => {
+                InvalidateRect(self.hwnd, null(), 0);
+                self.update_actions();
                 return Ok(());
             }
             _ => {}
@@ -1452,7 +1651,26 @@ impl App {
             "Wait for the current background operation"
         );
         match id {
-            BROWSE => {
+            ADD_DESKTOP | SCAN_DESKTOP => {
+                let mut path = null_mut();
+                ensure!(
+                    SHGetKnownFolderPath(&FOLDERID_Desktop, 0, null_mut(), &mut path) >= 0
+                        && !path.is_null(),
+                    "Windows could not locate your Desktop. Choose a folder instead."
+                );
+                let mut length = 0;
+                while *path.add(length) != 0 {
+                    length += 1;
+                }
+                self.set(
+                    ROOT,
+                    &String::from_utf16_lossy(std::slice::from_raw_parts(path, length)),
+                );
+                CoTaskMemFree(path.cast());
+                self.organize_after_scan = true;
+                return self.command(SCAN);
+            }
+            BROWSE | TIDY_ADD_FOLDER => {
                 let mut info: BROWSEINFOW = zeroed();
                 info.hwndOwner = self.hwnd;
                 info.lpszTitle = w!("Choose the source folder. Importing does not move files.");
@@ -1464,6 +1682,7 @@ impl App {
                         let n = path.iter().position(|c| *c == 0).unwrap_or(0);
                         self.set(ROOT, &String::from_utf16_lossy(&path[..n]));
                         CoTaskMemFree(pidl.cast());
+                        self.organize_after_scan = id == TIDY_ADD_FOLDER;
                         return self.command(SCAN);
                     }
                     CoTaskMemFree(pidl.cast());
@@ -1473,6 +1692,8 @@ impl App {
                 let root = PathBuf::from(self.text(ROOT));
                 ensure!(root.is_absolute(), "Choose an absolute source folder");
                 self.layout.settings.root = root.clone();
+                self.set(JSON, "");
+                self.scope.clear();
                 self.changed();
                 self.worker.submit(Job::Scan(root))?;
                 self.task = 1;
@@ -1568,20 +1789,27 @@ impl App {
             }
             OFFLINE | REQUEST_AI => {
                 self.scope = self.selected_items(AI_ITEMS);
-                ensure!(!self.scope.is_empty(), "Select metadata items first");
+                ensure!(
+                    !self.scope.is_empty(),
+                    "Choose at least one file to organize."
+                );
                 self.plan = None;
                 if id == OFFLINE {
                     let groups = grouping::offline(&self.scope);
                     self.set_suggestions(groups)?;
-                    self.status("Preview ready. Rename groups or adjust files, then choose Apply groups. Your files stay in place.");
+                    self.status("Folder proposal ready. Review names, then choose Review file moves. Originals have not moved.");
                 } else {
+                    ensure!(
+                        !self.ai_settings_dirty(),
+                        "Save your AI settings before asking for groups."
+                    );
                     ensure!(
                         self.checked(CONSENT),
                         "Check the explicit metadata sharing consent first"
                     );
                     ensure!(
                         self.scope.len() <= crate::model::MAX_AI_ITEMS,
-                        "Select at most 200 metadata items for AI"
+                        "AI supports up to 200 files at once. Use Suggest folders for all files or select a smaller batch."
                     );
                     self.worker.submit(Job::Ai {
                         base: self.layout.settings.ai_base_url.clone(),
@@ -1596,16 +1824,14 @@ impl App {
             APPLY_VISUAL => {
                 let groups = ai::parse_content(&self.text(JSON), &self.scope)?;
                 grouping::apply_selected(&mut self.layout, &groups, &self.scope)?;
+                self.hidden = false;
+                self.fullscreen = false;
                 self.rebuild_groups()?;
                 self.refresh();
                 self.changed();
                 self.status("Visual groups applied. No files were moved.");
             }
             PREVIEW_MOVES => {
-                ensure!(
-                    self.checked(MOVE_OPT),
-                    "Enable Create folders and move files before previewing"
-                );
                 let text = self.text(JSON);
                 let groups = ai::parse_content(&text, &self.scope)?;
                 self.plan_json = text;
@@ -1620,8 +1846,8 @@ impl App {
             }
             APPLY_MOVES => {
                 ensure!(
-                    self.checked(MOVE_OPT) && self.text(JSON) == self.plan_json,
-                    "Options or JSON changed. Preview the moves again."
+                    self.text(JSON) == self.plan_json,
+                    "The plan changed. Review file moves again."
                 );
                 let plan = self.plan.clone().context("Preview file moves first")?;
                 let journal = self.data.join("operation.json");
@@ -1663,9 +1889,10 @@ impl App {
                 }
             }
             SAVE_SETTINGS => {
+                let ai_changed = self.ai_settings_dirty();
                 let base = self.text(BASE).trim().to_owned();
                 ai::endpoint(&base)?;
-                let model = self.text(MODEL);
+                let model = self.text(MODEL).trim().to_owned();
                 ensure!(
                     !model.trim().is_empty() && model.len() < 256,
                     "Enter a model name"
@@ -1695,12 +1922,28 @@ impl App {
                 s.opacity = opacity;
                 s.hide_on_fullscreen = hide_on_fullscreen;
                 s.startup_update_check = startup_update_check;
+                if ai_changed || self.ai_connection == AiConnection::NotTested {
+                    self.ai_edited();
+                    self.set_ai_connection(AiConnection::NotTested, "AI configured · not tested");
+                }
                 for w in self.windows.values() {
                     SetLayeredWindowAttributes(w.hwnd, 0, opacity, LWA_ALPHA);
                 }
                 self.changed();
                 self.fullscreen_policy();
-                self.status("Settings saved in the background. The API token stays protected by Windows DPAPI.");
+                self.status("Saving settings…");
+            }
+            TEST_AI => {
+                self.command(SAVE_SETTINGS)?;
+                self.worker.submit(Job::TestAi {
+                    revision: self.ai_revision,
+                    base: self.layout.settings.ai_base_url.clone(),
+                    model: self.layout.settings.ai_model.clone(),
+                    key: self.layout.settings.protected_api_key.clone(),
+                })?;
+                self.task = 9;
+                self.set_ai_connection(AiConnection::Checking, "Checking AI…");
+                self.status("Testing the selected AI model. No file names are sent.");
             }
             CHECK => {
                 self.worker.submit(Job::Check)?;
@@ -1730,7 +1973,8 @@ impl App {
                 SetWindowLongPtrW(
                     control.hwnd,
                     GWLP_USERDATA,
-                    (control.id - 100 == self.page as u16) as isize,
+                    (control.id - 100 == if self.page == 5 { 2 } else { self.page as u16 })
+                        as isize,
                 );
             }
             set_control_visible(control.hwnd, self.control_visible(control));
@@ -1757,9 +2001,24 @@ impl App {
             (APPLY_VISUAL, ready && suggested),
             (RENAME_PROPOSAL, ready && suggested),
             (ASSIGN_PROPOSAL, ready && suggested),
-            (OFFLINE, ready && !self.layout.items.is_empty()),
-            (REQUEST_AI, ready && !self.layout.items.is_empty()),
-            (PREVIEW_MOVES, ready && suggested && self.checked(MOVE_OPT)),
+            (
+                OFFLINE,
+                ready && SendMessageW(self.c(AI_ITEMS), LB_GETSELCOUNT, 0, 0) > 0,
+            ),
+            (
+                REQUEST_AI,
+                ready
+                    && self.checked(CONSENT)
+                    && SendMessageW(self.c(AI_ITEMS), LB_GETSELCOUNT, 0, 0) > 0,
+            ),
+            (TEST_AI, ready),
+            (SAVE_SETTINGS, ready),
+            (ADD_DESKTOP, ready),
+            (SCAN_DESKTOP, ready),
+            (TIDY_ADD_FOLDER, ready),
+            (SELECT_ALL, ready && !self.tidy_items.is_empty()),
+            (MOVE_OPT, ready && !self.layout.items.is_empty()),
+            (PREVIEW_MOVES, ready && suggested),
             (APPLY_MOVES, ready && self.plan.is_some()),
             (SCAN, ready && !self.text(ROOT).trim().is_empty()),
         ] {
@@ -1767,14 +2026,6 @@ impl App {
                 EnableWindow(self.c(id), enabled as _);
             }
         }
-        for id in [PREVIEW_MOVES, APPLY_MOVES, MOVES] {
-            set_control_visible(self.c(id), self.page == 2 && self.checked(MOVE_OPT));
-        }
-        let has_journal = self.data.join("operation.json").exists();
-        set_control_visible(
-            self.c(UNDO),
-            self.page == 2 && (self.checked(MOVE_OPT) || has_journal),
-        );
     }
     fn control_visible(&self, control: &Control) -> bool {
         if !(control.page == 0
@@ -1784,16 +2035,18 @@ impl App {
             return false;
         }
         match control.id {
+            SHOW_GROUPS => self.page != 2 && self.page != 5,
+            SCAN_DESKTOP => !self.tidy_items.is_empty(),
+            ADD_DESKTOP | TIDY_ADD_FOLDER => self.tidy_items.is_empty(),
+            AI_ITEMS | SELECT_ALL | OFFLINE | CONSENT | REQUEST_AI | MOVE_OPT
+            | AI_TIDY_CONNECTION => !self.tidy_items.is_empty(),
+            PROPOSALS | PROPOSAL_NAME | RENAME_PROPOSAL | ASSIGN_PROPOSAL | APPLY_VISUAL => {
+                !unsafe { self.text(JSON) }.is_empty()
+            }
             STATUS => !unsafe { self.text(STATUS) }.is_empty(),
             ITEMS => self.page == 1 && !self.layout.items.is_empty(),
-            PREVIEW_MOVES | APPLY_MOVES | MOVES => {
-                self.page == 2 && unsafe { self.checked(MOVE_OPT) }
-            }
-            UNDO => {
-                self.page == 2
-                    && (unsafe { self.checked(MOVE_OPT) }
-                        || self.data.join("operation.json").exists())
-            }
+            PREVIEW_MOVES => !unsafe { self.text(JSON) }.is_empty(),
+            UNDO => self.page == 2 && self.data.join("operation.json").exists(),
             _ => true,
         }
     }
@@ -1838,6 +2091,9 @@ impl App {
             match event {
                 Event::Saved(sequence, result) => match result {
                     Ok(()) => {
+                        if self.quitting.is_none() && self.text(STATUS) == "Saving settings…" {
+                            self.status("Settings saved.");
+                        }
                         if self.quitting == Some(sequence) {
                             if let Some(prepared) = self.pending_install.take() {
                                 match self.worker.submit(Job::Install(prepared)) {
@@ -1877,36 +2133,30 @@ impl App {
                     self.task = 0;
                     match result {
                         Ok(groups) => {
+                            if !self.ai_settings_dirty() {
+                                self.set_ai_connection(
+                                    AiConnection::Connected,
+                                    &format!("Connected · {}", self.layout.settings.ai_model),
+                                );
+                            }
                             if let Err(error) = self.set_suggestions(groups) {
                                 self.error(error);
                             }
                             self.status(
-                                "AI suggestion ready. Review or edit every group before applying.",
+                                "AI folder proposal ready. Choose Review file moves to check the destinations.",
                             );
                         }
                         Err(e) => self.error(e),
                     }
                 }
+                Event::AiTested(revision, result) => {
+                    self.task = 0;
+                    self.ai_test_result(revision, result);
+                }
                 Event::Previewed(result) => {
                     self.task = 0;
                     match result {
-                        Ok(plan) => {
-                            let text = plan
-                                .moves
-                                .iter()
-                                .map(|m| {
-                                    format!(
-                                        "{}  ->  {}",
-                                        m.source.display(),
-                                        m.destination.display()
-                                    )
-                                })
-                                .collect::<Vec<_>>()
-                                .join("\r\n");
-                            self.set(MOVES, &text);
-                            self.plan = Some(plan);
-                            self.status("Move preview ready. Scroll to review every source and destination before Apply.");
-                        }
+                        Ok(plan) => self.show_move_preview(plan),
                         Err(e) => self.error(e),
                     }
                 }
@@ -1915,7 +2165,9 @@ impl App {
                     match result {
                         Ok(plan) => {
                             self.sync_paths(&plan);
-                            self.status("File moves completed and journaled. Undo is available until another operation replaces the journal.");
+                            self.set(JSON, "");
+                            self.switch_page(2);
+                            self.status("Desktop organized. Your files are in the reviewed folders. Undo moves is available.");
                         }
                         Err(e) => {
                             self.error(e);
@@ -2044,6 +2296,52 @@ impl App {
         self.invalidate_groups();
         self.changed();
     }
+    unsafe fn show_move_preview(&mut self, plan: Plan) {
+        self.set(
+            MOVES,
+            &plan
+                .moves
+                .iter()
+                .map(|m| {
+                    format!(
+                        "{}\r\n    → {}",
+                        m.source.display(),
+                        m.destination.display()
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\r\n\r\n"),
+        );
+        self.set(APPLY_MOVES, &format!("Move {} files", plan.moves.len()));
+        self.plan = Some(plan);
+        self.switch_page(5);
+        self.update_actions();
+        self.status("Check each destination, then confirm to move the originals. Shortcuts' targets stay in place.");
+    }
+    unsafe fn ai_test_result(&mut self, revision: u64, result: Result<()>) {
+        if revision != self.ai_revision {
+            self.status("AI settings changed. Save and test again.");
+            return;
+        }
+        match result {
+            Ok(()) => {
+                self.set_ai_connection(
+                    AiConnection::Connected,
+                    &format!("Connected · {}", self.layout.settings.ai_model),
+                );
+                self.status(
+                    "AI connection verified. Scan your Desktop, then use Ask my AI for folder suggestions.",
+                );
+            }
+            Err(error) => {
+                self.set_ai_connection(
+                    AiConnection::Failed,
+                    "AI connection failed · check settings",
+                );
+                self.error(error);
+            }
+        }
+    }
     unsafe fn import_result(
         &mut self,
         group: u64,
@@ -2052,6 +2350,9 @@ impl App {
     ) {
         match result {
             Ok(entries) => {
+                let first_import = self.layout.items.is_empty();
+                let scanned_paths: HashSet<_> =
+                    entries.iter().map(|(path, _)| path.clone()).collect();
                 let mut count = 0;
                 for (path, dir) in entries {
                     if if preserve_groups {
@@ -2062,12 +2363,47 @@ impl App {
                         count += 1;
                     }
                 }
+                if preserve_groups {
+                    self.source_ids = Some(
+                        self.layout
+                            .items
+                            .iter()
+                            .filter(|item| scanned_paths.contains(&item.path))
+                            .map(|item| item.id)
+                            .collect(),
+                    );
+                }
                 self.refresh();
+                if first_import {
+                    SendMessageW(self.c(AI_ITEMS), LB_SETSEL, 1, -1);
+                }
+                self.update_actions();
                 self.invalidate_groups();
                 self.changed();
                 self.status(&format!("{count} items ready. Originals stay in place."));
+                if preserve_groups && self.organize_after_scan {
+                    self.organize_after_scan = false;
+                    SendMessageW(self.c(AI_ITEMS), LB_SETSEL, 1, -1);
+                    self.scope = self.selected_items(AI_ITEMS);
+                    if !self.scope.is_empty() {
+                        let result = self.set_suggestions(grouping::offline(&self.scope));
+                        if let Err(error) = result {
+                            self.error(error);
+                        } else {
+                            self.status(&format!("Found {} files and shortcuts. Review the proposed folders; originals have not moved.",self.scope.len()));
+                        }
+                    } else {
+                        self.status(
+                            "No loose files or shortcuts to move. Existing folders stay in place.",
+                        );
+                    }
+                    self.switch_page(2);
+                }
             }
-            Err(e) => self.error(e),
+            Err(e) => {
+                self.organize_after_scan = false;
+                self.error(e);
+            }
         }
     }
     unsafe fn restore(&mut self) {
@@ -2082,6 +2418,14 @@ impl App {
         SetForegroundWindow(self.hwnd);
     }
     unsafe fn show_groups(&self) {
+        self.set(
+            SHOW_GROUPS,
+            if self.hidden || self.fullscreen {
+                "Show groups"
+            } else {
+                "Hide groups"
+            },
+        );
         for w in self.windows.values() {
             ShowWindow(
                 w.hwnd,
@@ -2183,6 +2527,15 @@ impl App {
         AppendMenuW(menu, MF_STRING, 1, w!("Collapse / expand"));
         AppendMenuW(menu, MF_STRING, 2, w!("Open library / settings"));
         AppendMenuW(menu, MF_STRING, 3, w!("Hide all groups"));
+        AppendMenuW(menu, MF_SEPARATOR, 0, null());
+        let item_flags = MF_STRING
+            | if self.windows.get(&id).and_then(|w| w.selected).is_some() && self.task == 0 {
+                0
+            } else {
+                MF_GRAYED
+            };
+        AppendMenuW(menu, item_flags, 4, w!("Move selected item up\tAlt+Up"));
+        AppendMenuW(menu, item_flags, 5, w!("Move selected item down\tAlt+Down"));
         let mut point = POINT::default();
         GetCursorPos(&mut point);
         let window = self.windows[&id].hwnd;
@@ -2204,6 +2557,8 @@ impl App {
                 self.hidden = true;
                 self.show_groups();
             }
+            4 => self.shift_selected_item(id, -1),
+            5 => self.shift_selected_item(id, 1),
             _ => {}
         }
     }
@@ -2316,6 +2671,18 @@ impl App {
         }
     }
     unsafe fn hit_item(&self, id: u64, lp: LPARAM) -> Option<u64> {
+        self.hit_item_at(id, signed_low(lp), signed_high(lp))
+    }
+    unsafe fn shift_selected_item(&mut self, group: u64, delta: i32) {
+        if self.task == 0
+            && let Some(item) = self.windows.get(&group).and_then(|w| w.selected)
+            && self.layout.shift_item(item, delta)
+        {
+            self.invalidate_groups();
+            self.changed();
+        }
+    }
+    unsafe fn hit_item_at(&self, id: u64, x: i32, y: i32) -> Option<u64> {
         let window = self.windows.get(&id)?;
         let group = self.layout.groups.iter().find(|g| g.id == id)?;
         if group.collapsed {
@@ -2325,12 +2692,7 @@ impl App {
         let mut r = RECT::default();
         GetClientRect(window.hwnd, &mut r);
         let width = unscale(r.right, dpi);
-        let index = group_item_index(
-            unscale(signed_low(lp), dpi),
-            unscale(signed_high(lp), dpi),
-            width,
-            window.scroll,
-        )?;
+        let index = group_item_index(unscale(x, dpi), unscale(y, dpi), width, window.scroll)?;
         group.items.get(index).copied()
     }
     unsafe fn open_item(&self, id: u64) {
