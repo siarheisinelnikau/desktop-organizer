@@ -19,7 +19,7 @@ impl Options {
         }
         if !args.iter().any(|a| a == "--capture" || a == "--diagnose") {
             anyhow::bail!(
-                "Unknown command line. Use --capture ABSOLUTE.png --screen library|organize|settings|group [--fixture-root PATH] [--scenario populated|empty|error|long-names|ai-setup|http-server] [--scale 100|125|150]"
+                "Unknown command line. Use --capture ABSOLUTE.png --screen library|organize|settings|group|moves [--fixture-root PATH] [--scenario populated|empty|error|long-names|ai-setup|http-server|ai-connected|no-preview] [--scale 100|125|150]"
             );
         }
         let mut result = Self {
@@ -62,7 +62,7 @@ impl Options {
             "Diagnostic output must be absolute (.png for capture, .json for measurements)"
         );
         ensure!(
-            ["library", "organize", "settings", "group"].contains(&result.screen.as_str()),
+            ["library", "organize", "settings", "group", "moves"].contains(&result.screen.as_str()),
             "Unknown capture screen"
         );
         ensure!(
@@ -72,7 +72,9 @@ impl Options {
                 "error",
                 "long-names",
                 "ai-setup",
-                "http-server"
+                "http-server",
+                "ai-connected",
+                "no-preview"
             ]
             .contains(&result.scenario.as_str()),
             "Unknown capture scenario"
@@ -87,6 +89,7 @@ impl Options {
         match self.screen.as_str() {
             "organize" => 2,
             "settings" => 3,
+            "moves" => 5,
             _ => 1,
         }
     }

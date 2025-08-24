@@ -187,15 +187,46 @@ impl Layout {
         true
     }
     pub fn assign(&mut self, item: u64, group: u64) {
+        self.place_item(item, group, None);
+    }
+    /// Insert before a target tile, or append on a background drop, preserving all other order.
+    pub fn place_item(&mut self, item: u64, group: u64, before: Option<u64>) -> bool {
         if !self.items.iter().any(|i| i.id == item) || !self.groups.iter().any(|g| g.id == group) {
-            return;
+            return false;
+        }
+        if before == Some(item)
+            || before.is_some_and(|target| {
+                !self
+                    .groups
+                    .iter()
+                    .any(|g| g.id == group && g.items.contains(&target))
+            })
+        {
+            return false;
         }
         for g in &mut self.groups {
             g.items.retain(|id| *id != item);
             if g.id == group {
-                g.items.push(item);
+                let index = before
+                    .and_then(|target| g.items.iter().position(|id| *id == target))
+                    .unwrap_or(g.items.len());
+                g.items.insert(index, item);
             }
         }
+        true
+    }
+    pub fn shift_item(&mut self, item: u64, delta: i32) -> bool {
+        let Some(group) = self.groups.iter_mut().find(|g| g.items.contains(&item)) else {
+            return false;
+        };
+        let index = group.items.iter().position(|id| *id == item).unwrap();
+        let next = (index as i64 + delta as i64).clamp(0, group.items.len() as i64 - 1) as usize;
+        if next == index {
+            return false;
+        }
+        let id = group.items.remove(index);
+        group.items.insert(next, id);
+        true
     }
     pub fn refresh_reference(
         &mut self,
@@ -283,6 +314,31 @@ pub fn same_path(a: &Path, b: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn arranging_tiles_preserves_other_order_and_roundtrips_in_layout() {
+        let mut layout = Layout::default();
+        let root = std::env::current_dir().unwrap();
+        for name in ["First.txt", "Second.url", "Third.txt"] {
+            layout.import(root.join(name), false, 1);
+        }
+        let ids = layout.groups[0].items.clone();
+        let work = layout.add_group("Work").unwrap();
+        assert!(layout.place_item(ids[2], 1, Some(ids[0])));
+        assert_eq!(layout.groups[0].items, [ids[2], ids[0], ids[1]]);
+        assert!(layout.shift_item(ids[1], -1));
+        assert_eq!(layout.groups[0].items, [ids[2], ids[1], ids[0]]);
+        assert!(!layout.shift_item(ids[2], -1));
+        assert!(!layout.place_item(ids[0], 1, Some(999)));
+        assert!(layout.place_item(ids[1], work, None));
+        assert!(layout.place_item(ids[0], work, Some(ids[1])));
+        assert_eq!(layout.groups[1].items, [ids[0], ids[1]]);
+        layout.validate().unwrap();
+        let restored: Layout =
+            serde_json::from_str(&serde_json::to_string(&layout).unwrap()).unwrap();
+        assert_eq!(restored.groups[1].items, [ids[0], ids[1]]);
+        assert_eq!(restored.items[1].kind, "shortcut");
+        assert_eq!(restored.items[1].path, root.join("Second.url"));
+    }
     #[test]
     fn refreshing_a_folder_keeps_manual_group_assignments() {
         let root = std::env::current_dir().unwrap();

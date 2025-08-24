@@ -4,7 +4,7 @@ Work only in E:/work/github/desktop-organizer. Do not edit sibling projects or s
 
 ## Design and desktop validation
 
-Apply C:/Users/user/.codex/skills/product-design/SKILL.md for interface and UX work. Use a coherent palette, type scale, spacing and simple consumer workflows. The desktop groups are the everyday surface; the library is an editing workspace reached through the tray. Keep internal JSON/IDs out of the consumer workflow.
+Apply C:/Users/user/.codex/skills/product-design/SKILL.md for interface and UX work. Use a coherent palette, type scale, spacing and simple consumer workflows. The primary flow organizes existing user Desktop files: explicit scan, automatic folder proposal, full path review, final count confirmation. Floating groups are a secondary option, with the editing workspace reachable through the tray. Keep internal JSON/IDs out of the consumer workflow.
 
 Apply C:/Users/user/.codex/skills/rust-performance/SKILL.md for desktop work and its references/pre-computer-use-gate.md before launching or restoring a test instance. Prefer the existing CPU GDI/native-controls path. Verify idle/hidden redraw behavior with bounded diagnostics and counters; screenshots alone do not pass that gate.
 
