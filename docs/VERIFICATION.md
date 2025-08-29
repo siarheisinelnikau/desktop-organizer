@@ -6,21 +6,21 @@ Work stays in `E:/work/github/desktop-organizer`, with two Cargo jobs and a loca
 
 ## Automated checks
 
-Rust/Cargo 1.96.1, DesktopOrganizer v0.1.1: formatting, Clippy with warnings denied, **22 library tests**, optimized Windows x64 compilation and packaging passed. Tests cover grouping/selected-item preservation, folder refresh preserving manual assignments, actual synthetic HTTP exchanges, metadata privacy, malformed/unknown/duplicate model output, URL restrictions, DPAPI on a synthetic token, missing-public-release classification, root/name validation, no-overwrite moves, changed content, collision/undo/recovery, atomic persistence, capture argument isolation and group tile hit testing.
+Rust/Cargo 1.96.1, DesktopOrganizer v0.1.2: formatting, Clippy with warnings denied, **25 library tests**, optimized Windows x64 compilation and packaging passed. Tests cover grouping, stable within/across-group tile ordering and persistence, actual synthetic HTTP requests/probes, metadata privacy, strict model-output validation, URL restrictions, DPAPI, missing-release classification, atomic persistence and collision/move/undo/recovery. The shortcut fixture proves the target remains unchanged during shortcut-file move/undo.
 
 The executable is inspected without execution by `scripts/inspect_binary.py`: x64, Windows GUI subsystem, embedded `asInvoker` / `PerMonitorV2` / Common Controls v6 manifest, and no dynamic MSVC/UCRT dependency. The packaged checksum is in `dist/SHA256SUMS`.
 
 ```powershell
 ./scripts/check.ps1
 ./scripts/package.ps1
-python scripts/inspect_binary.py dist/DesktopOrganizer-v0.1.1.exe
+python scripts/inspect_binary.py dist/DesktopOrganizer-v0.1.2.exe
 ./scripts/capture.ps1
 git diff --check
 ```
 
 ## Actual visual evidence
 
-The five PNGs in `docs/screenshots/` are production Win32 controls plus the shared CPU GDI renderer. They show populated library, editable group preview, settings, expanded optional AI setup and a document group, at 100% scale. They are client-area captures, excluding OS title bars/menus and the physical taskbar. Each process saved its PNG and capture metadata, exited with code 0, made no startup network request, and did not load or save normal user settings. The capture path corrects its client extent after native scrollbars settle, avoiding unrendered strips at the viewport edge.
+The eight UI PNGs in `docs/screenshots/` are production Win32 controls and the shared CPU GDI renderer. They show the opening Desktop action, populated folder proposal, full move review, library, group, settings and optional AI states at 100% scale. The connected image is an explicitly selected synthetic completion state, not a live-provider claim. Captures exclude OS title bars/menus and the physical taskbar. Every process saved its own PNG/metadata and exited successfully without startup network work or normal settings access. The separate icon sheet is a resource-only proof.
 
 Additional local captures reviewed empty/error states and a long filename at 125% scale. Fields/actions stayed accessible; long row labels use ellipsis rather than shrinking text. These are deliberate developer scenarios, not claims that the UI was driven by real input. The empty state explains the next action; unavailable operations are disabled; optional filesystem controls are hidden until selected. Native owner-drawn lists retain their real strings and selection semantics. The source uses the same tile geometry for painting and pointer hit testing.
 
@@ -28,20 +28,33 @@ Additional local captures reviewed empty/error states and a long filename at 125
 
 Source/configuration review: native Win32 controls and GDI CPU drawing, no wgpu/OpenGL/DirectX renderer. Normal dispatch sleeps in GetMessage. Save debounce is one-shot. Workers block in bounded queues; network and file work use separate workers. Paint does not self-invalidate. Hidden/minimized WM_PAINT validates its region without building/rasterizing a scene. Capture mode explicitly renders a finite offscreen frame and exits.
 
-Final v0.1.1 bounded diagnostic: optimized `target/release/DesktopOrganizer.exe`, PID **14344**, six synthetic files, one second of settling followed by five seconds of sampling per state. This native diagnostic used no mouse/keyboard injection or computer-use API. See `diagnostics/runtime.json` for the original report.
+Final v0.1.2 diagnostic: optimized `target/release/DesktopOrganizer.exe`, PID **31088**, byte-identical to the packaged executable. Workload: seven source files including a shortcut, one existing directory and another-folder reference. Five-second samples follow one second of settling. No input injection or computer-use API was used; the report also separates UI-thread CPU and message traffic. See `diagnostics/runtime.json`.
 
-| State | Sample | CPU seconds | One-core CPU | Main/group rasters | Layouts / owner draws |
-| --- | --- | --- | --- | --- | --- |
-| Visible settled | 5.011 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
-| After navigation settled | 5.003 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
-| Hidden settled | 5.012 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
-| Restored settled | 5.012 s | 0 at process timer resolution | 0% | 0 / 0 | 0 / 0 |
+| State | Sample | Process one-core CPU | UI one-core CPU | Machine CPU | Main/group rasters | Blits / layouts / owner draws |
+| --- | --- | --- | --- | --- | --- | --- |
+| Visible settled | 5.006 s | 0% | 0% | 0% | 0 / 0 | 0 / 0 / 0 |
+| After navigation; accessibility traffic | 5.010 s | 5.30% | 2.81% | 0.265% | 0 / 0 | 0 / 0 / 0 |
+| Hidden settled | 5.008 s | 0% | 0% | 0% | 0 / 0 | 0 / 0 / 0 |
+| Restored settled | 5.011 s | 0% | 0% | 0% | 0 / 0 | 0 / 0 / 0 |
+| Restored follow-up | 5.014 s | 0% | 0% | 0% | 0 / 0 | 0 / 0 / 0 |
 
-Thirty transitions through Tidy up → Settings → My groups used the production command dispatcher. They caused **zero shared control-font recreations**, **zero layout passes**, and **zero unexpected visible controls**, including refreshes while another page was selected. Main-scene painting did not reenter the command dispatcher; the longest command dispatch was **8.92 ms**. This measures native dispatch/visibility, not a compositor frame time or subjective flicker.
+Thirty page transitions recreated no shared fonts, performed no layouts and exposed no wrong-page controls; maximum dispatch was 13.58 ms. Ten deliberate unchanged exposures rebuilt zero scenes. The sampled states had no paint/print, raster, model-refresh or status-update activity. A preceding cached run serviced 1/1/0/9 paint requests without scene construction. These are native/cache measurements, not subjective flicker or compositor timings.
 
-No sustained scene generation occurred in these settled windows. The native system-close path preserved the actual HWND and hid settings to tray; the production restore dispatcher made the window visible again. Tray registration succeeded outside the sandbox. The process exited normally after the bounded run. The earlier sandbox diagnostic could not register a tray icon, but kept settings accessible as designed.
+A separate earlier restored sample used 12.46% of one core without any raster/blit/layout activity (`diagnostics/cpu-before-message-trace.json`). That prompted the message/UI-thread instrumentation. The final non-idle sample received **900 WM_GETOBJECT messages**, which Windows uses for [accessibility object queries](https://learn.microsoft.com/en-us/windows/win32/winauto/wm-getobject). Since this app issues no accessibility queries itself, the trace points to accessibility-client traffic; the client's identity and the earlier spike's exact cause were not established. Native accessibility remains enabled. Clean visible/hidden and both restored samples were quiet; do not generalize them to every external-client workload.
+
+An earlier provisional run rebuilt the main scene 65 times during the restored sample (7.49% of one core), despite no layout/owner-draw activity. That failed the rendering gate; its raw evidence is preserved in `diagnostics/restore-before-cache.json`. The cause of each paint request was not identified. The renderer unnecessarily reconstructed the unchanged background for every paint, so it now retains a bitmap keyed by actual structural state. The final run above and ten deliberate exposures verify that those requests no longer rebuild the scene. Hidden operation performed neither rasterization nor cached blits.
+
+No self-sustaining scene generation occurred. Native system-close preserved the HWND and hid settings to tray, restore made it visible again, and the diagnostic explicitly removed its own tray icon before normal exit. The earlier sandbox tray refusal kept settings accessible as designed.
 
 This passes the narrow native idle/hidden/restore check. It does **not** establish pointer/scroll latency, physical tray clicks, focus behavior during a real user action, all native-control internals, GPU/compositor timing or universal absence of stutter. GPU telemetry was not collected. Do not infer interaction performance from the PNGs or CPU sample.
+
+## Desktop workflow and AI indication — v0.1.2
+
+The native diagnostic starts the planner without current-source files, invokes the production scan path with a synthetic Desktop root, automatically selects its seven loose files/shortcuts and generates five folder proposals. The existing directory and another-folder reference remain outside the plan. Review file moves opens the full review page for exactly those seven files without applying any move. A separate model/file-operation suite verifies insertion/order persistence and shortcut move/undo; real drag gestures and final confirmation clicks remain untested.
+
+Four production Show/Hide commands verified actual group HWND visibility and matching captions. The real probe transport was exercised through the network worker against a bounded loopback server with a synthetic DPAPI token and a constant prompt, without file metadata. Native success, failure and stale-completion fixtures verified indicator text/color and invalidation after edits. No real provider or user's Desktop was contacted.
+
+The packaged EXE is 4,397,568 bytes and matches the verified build. [Current icon metadata](verification/icons-v0.1.2.json) records its SHA-256 and artwork sizes. PE/manifest inspection and resource-only icon rendering passed. The full review was also inspected at 125% scale without clipped actions. Current screenshots and README describe the direct scan/propose/review/confirm flow.
 
 ## HTTP and settings regression checks — v0.1.1
 
@@ -87,7 +100,7 @@ No repository/release publication was authorized. Complete the remaining interac
 
 ## Shared updater and icon audit — 2026-11-01
 
-This section records the earlier v0.1.0 baseline. The current v0.1.1 HTTP/settings and rendering evidence appears above.
+This section records the earlier v0.1.0 baseline. The current v0.1.2 workflow/rendering evidence appears above.
 
 The portable executable now embeds the established four-tile artwork at 16, 20, 24, 32, 48, 64, 128 and 256 pixels. Main/group window classes use native large/small handles from `LoadIconMetric`; the tray uses the small handle. The previous code created only one runtime 32-pixel icon and supplied no Explorer EXE icon. `scripts/verify-icons.py` loads the optimized artifact as resource data, checks its group sizes, and draws each small icon with `LoadImageW`/`DrawIconEx` on light/dark backgrounds. [The inspected resource proof](screenshots/embedded-icons.png) is not an OS tray screenshot. [Resource metadata](verification/icons-2026-11-01.json) identifies the checked binary/hash.
 

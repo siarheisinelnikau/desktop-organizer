@@ -1,12 +1,12 @@
 # DesktopOrganizer
 
-An independent, MIT-licensed Windows desktop organizer with named groups and optional AI suggestions. It uses native Win32 controls and a custom GDI tile view. It has no connection to Stardock, uses no competitor code or artwork, and does not require WebView, a service, a model download or an AI subscription.
+Organize the files and shortcuts already on your Windows Desktop into reviewed folders. Optional floating groups and AI suggestions are also available. This independent, MIT-licensed application uses native Win32 controls and GDI; it has no connection to Stardock, uses no competitor artwork and requires no WebView, service, model download or AI subscription.
 
-**Status: local implementation, v0.1.1.** Windows x64 compilation, 22 tests including synthetic HTTP exchanges, real component captures, and bounded native settings/navigation/idle/close/restore diagnostics are verified. Physical tray clicks, drag-and-drop and broader hardware behavior still need interactive validation. The planned [GitHub repository](https://github.com/siarheisinelnikau/desktop-organizer) and releases have not been published in this work session.
+**Status: local implementation, v0.1.2.** Windows x64 compilation, 25 tests including synthetic HTTP exchanges, real component captures, and bounded native import/settings/navigation/visibility diagnostics are verified. Physical tray clicks, drag-and-drop and broader hardware behavior still need interactive validation. The planned [GitHub repository](https://github.com/siarheisinelnikau/desktop-organizer) and releases have not been published in this work session.
 
 ## What it does
 
-- Named, movable, resizable group windows with persisted layouts, collapse/expand, mouse-wheel scrolling, opacity and an accent color.
+- Named, movable, resizable group windows with persisted layouts and tile order, collapse/expand, mouse-wheel scrolling, opacity and an accent color.
 - Import references from an explicitly selected folder, or drop files/folders from Explorer onto a group. Drag tiles between groups; double-click or press Enter to open an item. Delete removes a reference only.
 - Tray entry for settings, show/hide groups and explicit save-and-quit; closing settings keeps the app in the tray. A second launch requests activation of the existing instance.
 - Per-monitor DPI awareness, monitor-relative placement, clamping to the available work area after monitor changes, and optional hiding while the foreground window covers its monitor.
@@ -27,21 +27,21 @@ cargo fetch --locked
 ./scripts/check.ps1
 ./scripts/package.ps1
 # Optional static inspection with Python 3 (never loads/executes the EXE):
-python scripts/inspect_binary.py dist/DesktopOrganizer-v0.1.1.exe
+python scripts/inspect_binary.py dist/DesktopOrganizer-v0.1.2.exe
 ```
 
 The shared updater workspace must be present at `../rust-auto-updator`; its core crate is a local path dependency, not a published package. CI runners must provision that sibling workspace before Cargo resolution. Standalone repository checkout is insufficient until the shared workspace is published or separately supplied.
 
-Cargo uses at most two jobs and this repository's `target/`. Verification and packaging use `--offline` and never launch the GUI, updater helper, or any item. HTTP integration tests use a bounded server on `127.0.0.1` with synthetic tokens; no real AI provider is contacted. The output is `dist/DesktopOrganizer-v0.1.1.exe`, with `LICENSE`, `SHA256SUMS` and third-party license texts. This is one executable architecture, so its asset name has no architecture suffix. The binary is currently unsigned; no release or signing certificate is implied.
+Cargo uses at most two jobs and this repository's `target/`. Verification and packaging use `--offline` and never launch the GUI, updater helper, or any item. HTTP integration tests use a bounded server on `127.0.0.1` with synthetic tokens; no real AI provider is contacted. The output is `dist/DesktopOrganizer-v0.1.2.exe`, with `LICENSE`, `SHA256SUMS` and third-party license texts. This is one executable architecture, so its asset name has no architecture suffix. The binary is currently unsigned; no release or signing certificate is implied.
 
 ## Use
 
 1. Start the EXE manually in a writable portable folder. No automatic Windows startup entry is installed.
-2. In **My groups**, choose **Add a folder** to select and import a source folder in one step. Import is a snapshot; use **Refresh** for later changes. Refresh preserves existing group assignments and adds new references to the selected group. Missing files are not automatically removed.
-3. Select a group to rename/remove it or add another. Select items and **Add to group**, or drag tiles between group windows. Double-click a group title or use its context menu to fold/unfold it. Closing a group folds it rather than deleting files.
-4. In **Tidy up**, select files and choose **Suggest groups** for an offline preview. Rename a proposed group, or select files and use **Add selected files here**. **Use these groups** changes only the visual layout and keeps unselected references.
-5. Optionally configure AI or use the separately enabled filesystem workflow described below.
-6. In **Settings**, adjust the opacity slider (60–100%), accent or update preferences and choose **Save settings**. **Connect AI** reveals the optional provider fields. Use **Quit** to exit; the last layout write completes before normal exit.
+2. Choose **Scan my Desktop** on the opening **Organize** screen. It reads the files and shortcuts already on your configured user Desktop, including Windows folder redirection, and immediately proposes folders offline. You do not need to add new files or pick every item. Existing directories stay in place; shared Public Desktop shortcuts can be handled separately through **Choose another folder**. Nothing moves during scanning.
+3. Review the proposed folder names. Rename a folder or reassign selected files if needed. **Suggest folders** rebuilds the offline proposal; **Ask my AI** is optional and requires explicit metadata consent. The current-source list excludes existing directories and references from other folders. A fresh scan excludes stale references without deleting them from the library.
+4. Choose **Review file moves** to open the full original-path/destination list. **Move N files** asks for final confirmation before creating folders and moving originals inside the same Desktop/source root. **Undo moves** reverses verified completed moves when paths/content still permit it.
+5. For floating tiles instead of real folders, use **Use visual groups only**. In **My groups**, manage groups or assign references. Drag onto a tile to insert before it, or onto empty space to append, within or between groups; context-menu commands and **Alt+Up / Alt+Down** also reorder a selected tile. The order is saved. **Show groups / Hide groups** in My groups/Settings toggles the windows; the tray has explicit show/hide actions. Floating groups start hidden and appear when requested. Closing a group folds it rather than deleting files.
+6. In **Settings**, adjust the opacity slider (60–100%), accent or update preferences and choose **Save settings**. **AI settings** reveals the optional provider fields; **Save & test AI** verifies the configured model. Use **Quit** to exit; the last layout write completes before normal exit.
 
 Settings and references live in `%LOCALAPPDATA%\DesktopOrganizer\layout.json`; the current filesystem journal is `operation.json`. Layout writes use a flushed temporary file and atomic replacement. A malformed/future layout is preserved and startup reports an error instead of replacing it. An existing operation journal is reconciled in the file worker on startup so references follow verified completed moves; ambiguous states are reported for manual attention. Back up this directory while the app is closed if you need layout history. The first version has a single active layout, not multiple named layout profiles.
 
@@ -55,7 +55,9 @@ Model: universal
 New API token: <your own token>
 ```
 
-Open **Settings → Connect AI**, enter the provider and your own token if required, and choose **Save settings**. A blank token field keeps the existing saved token; **Remove saved token** clears it. DPAPI encrypts the saved token for the current Windows user. Do not copy encrypted tokens between accounts. No provider secrets are included in this repository, read from other applications, or auto-discovered.
+Open **Settings → AI settings**, enter the provider and your own token if required. **Save settings** stores configuration; **Save & test AI** saves it and sends a small test chat to the selected model, without filenames or library metadata. The status distinguishes **not tested**, **checking**, green **Connected**, and **connection failed**. Editing connection fields invalidates the checked state; an old response cannot mark the changed configuration connected. Status is the last check in this session, not continuous monitoring, and starts unverified after a restart. Successful grouping requests also confirm access.
+
+A blank token field keeps the existing saved token; **Remove saved token** clears it. DPAPI encrypts the saved token for the current Windows user. Do not copy encrypted tokens between accounts. No provider secrets are included in this repository, read from other applications, or auto-discovered.
 
 HTTP and HTTPS servers are supported, including an HTTP server on another LAN computer. HTTP displays **HTTP is unencrypted. Avoid public Wi-Fi.** under the address; it does not block saving or require another confirmation. Prefer HTTPS when the network cannot be trusted. DPAPI protects the saved token on disk, not an HTTP connection. API URLs must not embed credentials, queries or fragments.
 
@@ -63,16 +65,18 @@ Before each sharing session, select 1–200 items and explicitly enable **Share 
 
 Responses must be strict JSON with only `groups`, `name` and `item_ids`. Unknown/duplicate IDs, missing items, empty groups, excess groups, extra fields, Markdown and oversized/malformed responses are rejected. Filenames are treated as untrusted data. No model text is executed as a command. A provider failure never silently applies a proposal; offline **Suggest groups** remains available. No live AI endpoint was called during development.
 
-## Optional file moves and undo
+## File moves and undo
 
-Default grouping never moves files. To organize the filesystem deliberately:
+Scanning and suggestions never move files. The primary Desktop workflow previews actual file moves:
 
-1. Review the group preview and enable **Create folders too — review every move first**. This reveals the separate file-operation controls.
-2. Choose **Review moves**. The scrollable pane lists every original path and final destination, including collision suffixes. Change group names or assignments in the group preview and preview again to change the plan.
-3. Review all moves and choose **Move files**, then confirm the count. Changes to sources after preview cause a refusal, rather than moving unknown content.
+1. Choose **Scan my Desktop**, then review/edit the automatically proposed folders.
+2. Choose **Review file moves**. A separate review screen lists every original path and destination, including collision suffixes. **Back to folders** returns to editing; review again after changing the proposal.
+3. Review all moves and choose **Move N files**, then confirm the count. Changes to sources after preview cause a refusal, rather than moving unknown content.
 4. **Undo moves** loads/reconciles the journal and reverses completed moves, including after a restart. Changed destinations or newly occupied original paths stop undo safely. Resolve such conflicts manually with the journal preserved, then retry.
 
 Only ordinary files directly inside the chosen source folder can be moved into one-level group subfolders of that same root. Folders can be grouped visually but are not recursively moved. UNC/device paths, alternate data streams, traversal, symbolic links and reparse-point ancestors are rejected. Windows directory handles exclude write/delete sharing to prevent ancestor substitution; source content is verified through a handle locked against writers/deleters, followed by an atomic no-replace rename by handle. Collisions use numbered names in preview; new collisions after preview stop without overwriting. Cross-volume moves, cloud placeholders/reparse points and elevation are intentionally unsupported.
+
+`.lnk` and `.url` shortcuts are references: grouping/reordering changes only their visual placement; a confirmed filesystem move moves the shortcut file itself. Its target program or document is not moved. A synthetic `.url` move/undo test verifies that the target remains unchanged.
 
 Journal entries are flushed before and after each rename. An interrupted operation with exactly one matching source/destination can be reconciled. Ambiguous cases (both/neither path, or edited content) require manual resolution; this is not a transactional rollback across all files. Earlier completed moves can be undone after a later move fails. Only empty directories recorded by the operation are removed during undo. A previous journal with completed moves must be undone/resolved before another file operation can replace it.
 
@@ -90,17 +94,25 @@ Installation needs a writable EXE directory and no administrator rights. The sha
 
 See [verification](docs/VERIFICATION.md), [architecture](docs/ARCHITECTURE.md), and the [initial release-note draft](docs/RELEASE_NOTES.md). CI performs noninteractive Windows compilation and fixture tests, then uploads build artifacts; it never publishes a release.
 
-The images below were generated by this executable from its production GDI renderer and native Win32 controls, using six synthetic files. They show client areas at 100% scale. They are not desktop photographs and do not certify OS-native tray menus or input behavior.
+The images below were generated by this executable from its production GDI renderer and native Win32 controls, using seven synthetic files (including a shortcut) and one existing directory. They show client areas at 100% scale. They are not desktop photographs and do not certify OS-native tray menus or input behavior.
 
 ![Desktop group with three document references](docs/screenshots/group.png)
 
 ![Populated library with group management and file references](docs/screenshots/library.png)
 
-![Editable group preview without a JSON editor](docs/screenshots/organize.png)
+![Desktop folder proposal with a direct Review file moves action](docs/screenshots/organize.png)
+
+![Opening Organize screen with Scan my Desktop for existing files](docs/screenshots/organize-empty.png)
+
+![Full original-path and destination review before confirming file moves](docs/screenshots/moves.png)
 
 ![Settings with opacity slider, optional AI connection and updates](docs/screenshots/settings.png)
 
 ![AI settings with a synthetic HTTP address, brief transport warning and unavailable public release state](docs/screenshots/settings-ai.png)
+
+The following is the real application's explicit synthetic success scenario for reviewing the connected indicator; no real provider was contacted to generate this image.
+
+![Green connected indicator in the synthetic connection-success scenario](docs/screenshots/settings-connected.png)
 
 Reproduce these bounded render-save-exit captures with `./scripts/capture.ps1`. Each invocation renders its own components into a CPU bitmap, writes a PNG plus `.capture.json` metadata, and exits without tray registration, startup update requests or access to normal user settings. The script never automates the desktop.
 
@@ -112,11 +124,11 @@ Developer-only examples (use absolute output and fixture paths):
 ./target/release/DesktopOrganizer.exe --diagnose E:/work/github/desktop-organizer/.local/runtime.json --fixture-root E:/work/github/desktop-organizer/.local/SampleDesktop
 ```
 
-Capture supports `library`, `organize`, `settings`, `group`, scenarios `populated`, `empty`, `error`, `long-names`, `ai-setup`, `http-server`, and scale 100/125/150. `http-server` is an explicit synthetic UI state, not a connection to the shown example address. Diagnostic mode verifies native saving of HTTP settings, a synthetic DPAPI token and the startup-check opt-out in its output directory. It also runs 30 native page transitions and finite visible/hidden/restore tests with five-second sampling windows, writes CPU and raster/layout counters, and exits; it can briefly show its own test windows. Apply an external timeout (15 seconds for capture, 35 for diagnosis). Physical tray activation, keyboard navigation, perceived flicker and presentation latency require separate interaction checks.
+Capture supports `library`, `organize`, `moves`, `settings`, `group`, scenarios `populated`, `empty`, `error`, `long-names`, `ai-setup`, `http-server`, `ai-connected`, `no-preview`, and scale 100/125/150. The HTTP/connected scenarios select synthetic UI states. Diagnostic mode verifies settings, current-folder scan/proposal/review without moving files, connection indication, four show/hide transitions, 30 page transitions and ten unchanged exposures. It samples visible/hidden/restore/follow-up states, separates rasters from cached blits and UI CPU from process CPU, records message types, removes its tray icon and exits. Apply an external timeout (15 seconds for capture, 48 for diagnosis). Physical input, dragging, perceived flicker and compositor latency need separate checks; see the verification record for accessibility-traffic measurements.
 
 
 The Windows executable and native small tray handle now share embedded multi-size artwork. This is a resource rendering proof from the actual optimized EXE, not a screenshot of the OS tray:
 
 ![Embedded application and small tray icon resource proof](docs/screenshots/embedded-icons.png)
 
-The [verification record](docs/VERIFICATION.md) includes the v0.1.1 HTTP/settings checks and measured idle/hidden counters. [Icon resource metadata](docs/verification/icons-v0.1.1.json) identifies the current package; shell interaction limits remain separate from this resource proof.
+The [verification record](docs/VERIFICATION.md) includes the v0.1.2 workflow checks and measured idle/hidden counters. [Icon resource metadata](docs/verification/icons-v0.1.2.json) identifies the current package; shell interaction limits remain separate from this resource proof.

@@ -1,0 +1,85 @@
+{
+  "backend": "CPU GDI / native Win32 controls; no GPU renderer",
+  "executable": "E:\\work\\github\\desktop-organizer\\target\\release\\DesktopOrganizer.exe",
+  "fixture_items": 7,
+  "gpu_telemetry": "not collected; compositor/driver timing is not certified",
+  "navigation": {
+    "count": 30,
+    "fonts_created": 0,
+    "layouts": 0,
+    "max_dispatch_ms": 7.4424,
+    "scene_paints_during_dispatch": 0,
+    "scope": "native dispatch and visibility; not a subjective flicker or presentation-latency measurement",
+    "unexpected_visibility": 0
+  },
+  "pid": 29536,
+  "profile": "release",
+  "restore_visible": true,
+  "samples": [
+    {
+      "cpu_machine_percent": 0.0,
+      "cpu_one_core_percent": 0.0,
+      "cpu_seconds": 0.0,
+      "group_rasters": 0,
+      "layouts": 0,
+      "main_rasters": 0,
+      "owner_draws": 0,
+      "seconds": 5.0062716,
+      "state": "visible settled"
+    },
+    {
+      "cpu_machine_percent": 0.0,
+      "cpu_one_core_percent": 0.0,
+      "cpu_seconds": 0.0,
+      "group_rasters": 0,
+      "layouts": 0,
+      "main_rasters": 0,
+      "owner_draws": 0,
+      "seconds": 5.0125421,
+      "state": "after navigation settled"
+    },
+    {
+      "cpu_machine_percent": 0.0,
+      "cpu_one_core_percent": 0.0,
+      "cpu_seconds": 0.0,
+      "group_rasters": 0,
+      "layouts": 0,
+      "main_rasters": 0,
+      "owner_draws": 0,
+      "seconds": 5.0086714,
+      "state": "hidden settled"
+    },
+    {
+      "cpu_machine_percent": 0.37445009008670044,
+      "cpu_one_core_percent": 7.489001801734009,
+      "cpu_seconds": 0.375,
+      "group_rasters": 0,
+      "layouts": 0,
+      "main_rasters": 65,
+      "owner_draws": 0,
+      "seconds": 5.0073429,
+      "state": "restored settled"
+    }
+  ],
+  "scope": "isolated in-process integration and idle load; physical tray clicks and keyboard traversal not tested",
+  "settings": {
+    "http_url_and_startup_opt_out_persisted": true,
+    "http_warning_shown": true,
+    "https_warning_hidden": true,
+    "live_provider_requests": 0,
+    "synthetic_token_dpapi_roundtrip": true,
+    "token_field_cleared": true
+  },
+  "system_close_hid_to_tray": true,
+  "system_close_preserved_window": true,
+  "tray_registered": true,
+  "workflow": {
+    "connection_success_failure_and_stale_ui_states": true,
+    "connection_ui_scope": "synthetic completion events; actual probe transport is tested separately against loopback",
+    "empty_onboarding": true,
+    "first_import_selected": 7,
+    "fixture_items_imported": 7,
+    "group_toggle_four_transitions": true,
+    "offline_groups_applied": 5
+  }
+}
