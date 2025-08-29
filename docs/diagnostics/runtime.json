@@ -1,18 +1,18 @@
 {
   "backend": "CPU GDI / native Win32 controls; no GPU renderer",
   "executable": "E:\\work\\github\\desktop-organizer\\target\\release\\DesktopOrganizer.exe",
-  "fixture_items": 6,
+  "fixture_items": 9,
   "gpu_telemetry": "not collected; compositor/driver timing is not certified",
   "navigation": {
     "count": 30,
     "fonts_created": 0,
     "layouts": 0,
-    "max_dispatch_ms": 8.919500000000001,
+    "max_dispatch_ms": 13.5795,
     "scene_paints_during_dispatch": 0,
     "scope": "native dispatch and visibility; not a subjective flicker or presentation-latency measurement",
     "unexpected_visibility": 0
   },
-  "pid": 14344,
+  "pid": 31088,
   "profile": "release",
   "restore_visible": true,
   "samples": [
@@ -22,10 +22,44 @@
       "cpu_seconds": 0.0,
       "group_rasters": 0,
       "layouts": 0,
+      "main_blits": 0,
       "main_rasters": 0,
+      "message_waits": 6,
+      "messages": {
+        "queue:0x0113": 1
+      },
       "owner_draws": 0,
-      "seconds": 5.0110746,
-      "state": "visible settled"
+      "refreshes": 0,
+      "seconds": 5.0055286,
+      "state": "visible settled",
+      "status_updates": 0,
+      "ui_thread_cpu_seconds": 0.0,
+      "ui_thread_one_core_percent": 0.0,
+      "wm_paint": 0,
+      "wm_printclient": 0
+    },
+    {
+      "cpu_machine_percent": 0.2650986572200359,
+      "cpu_one_core_percent": 5.301973144400718,
+      "cpu_seconds": 0.265625,
+      "group_rasters": 0,
+      "layouts": 0,
+      "main_blits": 0,
+      "main_rasters": 0,
+      "message_waits": 5350,
+      "messages": {
+        "main:0x003d": 900,
+        "queue:0x0113": 1
+      },
+      "owner_draws": 0,
+      "refreshes": 0,
+      "seconds": 5.0099273,
+      "state": "after navigation settled",
+      "status_updates": 0,
+      "ui_thread_cpu_seconds": 0.140625,
+      "ui_thread_one_core_percent": 2.8069269588003802,
+      "wm_paint": 0,
+      "wm_printclient": 0
     },
     {
       "cpu_machine_percent": 0.0,
@@ -33,10 +67,19 @@
       "cpu_seconds": 0.0,
       "group_rasters": 0,
       "layouts": 0,
+      "main_blits": 0,
       "main_rasters": 0,
+      "message_waits": 5,
+      "messages": {},
       "owner_draws": 0,
-      "seconds": 5.0027217,
-      "state": "after navigation settled"
+      "refreshes": 0,
+      "seconds": 5.0078239,
+      "state": "hidden settled",
+      "status_updates": 0,
+      "ui_thread_cpu_seconds": 0.0,
+      "ui_thread_one_core_percent": 0.0,
+      "wm_paint": 0,
+      "wm_printclient": 0
     },
     {
       "cpu_machine_percent": 0.0,
@@ -44,10 +87,22 @@
       "cpu_seconds": 0.0,
       "group_rasters": 0,
       "layouts": 0,
+      "main_blits": 0,
       "main_rasters": 0,
+      "message_waits": 13,
+      "messages": {
+        "queue:0x0113": 2,
+        "queue:0x0118": 10
+      },
       "owner_draws": 0,
-      "seconds": 5.0122998,
-      "state": "hidden settled"
+      "refreshes": 0,
+      "seconds": 5.0111701,
+      "state": "restored settled",
+      "status_updates": 0,
+      "ui_thread_cpu_seconds": 0.0,
+      "ui_thread_one_core_percent": 0.0,
+      "wm_paint": 0,
+      "wm_printclient": 0
     },
     {
       "cpu_machine_percent": 0.0,
@@ -55,10 +110,22 @@
       "cpu_seconds": 0.0,
       "group_rasters": 0,
       "layouts": 0,
+      "main_blits": 0,
       "main_rasters": 0,
+      "message_waits": 6,
+      "messages": {
+        "main:0x0086": 1,
+        "queue:0x0118": 1
+      },
       "owner_draws": 0,
-      "seconds": 5.0118243,
-      "state": "restored settled"
+      "refreshes": 0,
+      "seconds": 5.0141321,
+      "state": "restored follow-up",
+      "status_updates": 0,
+      "ui_thread_cpu_seconds": 0.0,
+      "ui_thread_one_core_percent": 0.0,
+      "wm_paint": 0,
+      "wm_printclient": 0
     }
   ],
   "scope": "isolated in-process integration and idle load; physical tray clicks and keyboard traversal not tested",
@@ -72,5 +139,18 @@
   },
   "system_close_hid_to_tray": true,
   "system_close_preserved_window": true,
-  "tray_registered": true
+  "tray_registered": true,
+  "tray_removed_before_exit": true,
+  "unchanged_exposure_rasters": 0,
+  "unchanged_exposures": 10,
+  "workflow": {
+    "connection_success_failure_and_stale_ui_states": true,
+    "connection_ui_scope": "synthetic completion events; actual probe transport is tested separately against loopback",
+    "empty_onboarding": true,
+    "file_review_opened_without_moving": true,
+    "first_import_selected": 7,
+    "fixture_items_imported": 7,
+    "group_toggle_four_transitions": true,
+    "offline_groups_applied": 5
+  }
 }
