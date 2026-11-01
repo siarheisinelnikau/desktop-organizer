@@ -1,0 +1,1269 @@
+{
+  "Language": [
+    "Язык",
+    "Langue",
+    "Sprache",
+    "Idioma",
+    "Lingua"
+  ],
+  "Theme": [
+    "Тема",
+    "Thème",
+    "Design",
+    "Tema",
+    "Tema"
+  ],
+  "Light": [
+    "Светлая",
+    "Clair",
+    "Hell",
+    "Claro",
+    "Chiaro"
+  ],
+  "Dark": [
+    "Тёмная",
+    "Sombre",
+    "Dunkel",
+    "Oscuro",
+    "Scuro"
+  ],
+  "My groups": [
+    "Мои группы",
+    "Mes groupes",
+    "Meine Gruppen",
+    "Mis grupos",
+    "I miei gruppi"
+  ],
+  "Organize": [
+    "Упорядочить",
+    "Organiser",
+    "Organisieren",
+    "Organizar",
+    "Organizza"
+  ],
+  "Settings": [
+    "Настройки",
+    "Paramètres",
+    "Einstellungen",
+    "Ajustes",
+    "Impostazioni"
+  ],
+  "Show groups": [
+    "Показать группы",
+    "Afficher les groupes",
+    "Gruppen anzeigen",
+    "Mostrar grupos",
+    "Mostra gruppi"
+  ],
+  "Hide groups": [
+    "Скрыть группы",
+    "Masquer les groupes",
+    "Gruppen ausblenden",
+    "Ocultar grupos",
+    "Nascondi gruppi"
+  ],
+  "Add a folder": [
+    "Добавить папку",
+    "Ajouter un dossier",
+    "Ordner hinzufügen",
+    "Añadir carpeta",
+    "Aggiungi cartella"
+  ],
+  "Refresh": [
+    "Обновить",
+    "Actualiser",
+    "Aktualisieren",
+    "Actualizar",
+    "Aggiorna"
+  ],
+  "New group": [
+    "Новая группа",
+    "Nouveau groupe",
+    "Neue Gruppe",
+    "Nuevo grupo",
+    "Nuovo gruppo"
+  ],
+  "Rename": [
+    "Переименовать",
+    "Renommer",
+    "Umbenennen",
+    "Renombrar",
+    "Rinomina"
+  ],
+  "Remove": [
+    "Удалить",
+    "Retirer",
+    "Entfernen",
+    "Quitar",
+    "Rimuovi"
+  ],
+  "Add to group": [
+    "Добавить в группу",
+    "Ajouter au groupe",
+    "Zur Gruppe hinzufügen",
+    "Añadir al grupo",
+    "Aggiungi al gruppo"
+  ],
+  "Remove from list": [
+    "Убрать из списка",
+    "Retirer de la liste",
+    "Aus Liste entfernen",
+    "Quitar de la lista",
+    "Rimuovi dall'elenco"
+  ],
+  "Select all": [
+    "Выбрать все",
+    "Tout sélectionner",
+    "Alle auswählen",
+    "Seleccionar todo",
+    "Seleziona tutto"
+  ],
+  "Suggest folders": [
+    "Предложить папки",
+    "Proposer des dossiers",
+    "Ordner vorschlagen",
+    "Sugerir carpetas",
+    "Suggerisci cartelle"
+  ],
+  "Use visual groups only": [
+    "Только визуальные группы",
+    "Groupes visuels uniquement",
+    "Nur visuelle Gruppen",
+    "Solo grupos visuales",
+    "Solo gruppi visivi"
+  ],
+  "Ask my AI": [
+    "Спросить мой ИИ",
+    "Demander à mon IA",
+    "Meine KI fragen",
+    "Consultar mi IA",
+    "Chiedi alla mia IA"
+  ],
+  "Review file moves": [
+    "Проверить перемещения",
+    "Vérifier les déplacements",
+    "Verschiebungen prüfen",
+    "Revisar movimientos",
+    "Controlla spostamenti"
+  ],
+  "Move files": [
+    "Переместить файлы",
+    "Déplacer les fichiers",
+    "Dateien verschieben",
+    "Mover archivos",
+    "Sposta file"
+  ],
+  "Undo moves": [
+    "Отменить перемещения",
+    "Annuler les déplacements",
+    "Verschieben rückgängig",
+    "Deshacer movimientos",
+    "Annulla spostamenti"
+  ],
+  "Check updates": [
+    "Проверить обновления",
+    "Vérifier les mises à jour",
+    "Updates prüfen",
+    "Buscar actualizaciones",
+    "Controlla aggiornamenti"
+  ],
+  "Download & install": [
+    "Скачать и установить",
+    "Télécharger et installer",
+    "Laden und installieren",
+    "Descargar e instalar",
+    "Scarica e installa"
+  ],
+  "Save settings": [
+    "Сохранить настройки",
+    "Enregistrer les paramètres",
+    "Einstellungen speichern",
+    "Guardar ajustes",
+    "Salva impostazioni"
+  ],
+  "Quit": [
+    "Выйти",
+    "Quitter",
+    "Beenden",
+    "Salir",
+    "Esci"
+  ],
+  "Share selected names and file types with my AI": [
+    "Передавать ИИ выбранные имена и типы файлов",
+    "Partager les noms et types choisis avec mon IA",
+    "Ausgewählte Namen und Dateitypen mit meiner KI teilen",
+    "Compartir nombres y tipos seleccionados con mi IA",
+    "Condividi nomi e tipi selezionati con la mia IA"
+  ],
+  "Move originals into folders — review first": [
+    "Переместить оригиналы в папки — сначала проверка",
+    "Déplacer les originaux après vérification",
+    "Originale nach Prüfung in Ordner verschieben",
+    "Mover originales a carpetas tras revisarlos",
+    "Sposta originali in cartelle dopo la verifica"
+  ],
+  "Hide groups while I use a fullscreen app": [
+    "Скрывать группы в полноэкранном режиме",
+    "Masquer les groupes en plein écran",
+    "Gruppen bei Vollbild ausblenden",
+    "Ocultar grupos en pantalla completa",
+    "Nascondi gruppi a schermo intero"
+  ],
+  "Choose your first folder": [
+    "Выберите первую папку",
+    "Choisissez votre premier dossier",
+    "Ersten Ordner auswählen",
+    "Elige tu primera carpeta",
+    "Scegli la prima cartella"
+  ],
+  "Files stay right where they are.": [
+    "Файлы остаются на своих местах.",
+    "Les fichiers restent à leur place.",
+    "Dateien bleiben an ihrem Platz.",
+    "Los archivos permanecen en su sitio.",
+    "I file restano dove sono."
+  ],
+  "My files": [
+    "Мои файлы",
+    "Mes fichiers",
+    "Meine Dateien",
+    "Mis archivos",
+    "I miei file"
+  ],
+  "Files and shortcuts": [
+    "Файлы и ярлыки",
+    "Fichiers et raccourcis",
+    "Dateien und Verknüpfungen",
+    "Archivos y accesos directos",
+    "File e collegamenti"
+  ],
+  "Suggested folders": [
+    "Предложенные папки",
+    "Dossiers proposés",
+    "Vorgeschlagene Ordner",
+    "Carpetas sugeridas",
+    "Cartelle suggerite"
+  ],
+  "Add selected files here": [
+    "Добавить выбранные файлы сюда",
+    "Ajouter les fichiers choisis ici",
+    "Ausgewählte Dateien hier hinzufügen",
+    "Añadir aquí archivos seleccionados",
+    "Aggiungi qui i file selezionati"
+  ],
+  "Scan my Desktop": [
+    "Сканировать рабочий стол",
+    "Analyser mon Bureau",
+    "Desktop durchsuchen",
+    "Analizar mi Escritorio",
+    "Analizza il Desktop"
+  ],
+  "Choose another folder": [
+    "Выбрать другую папку",
+    "Choisir un autre dossier",
+    "Anderen Ordner wählen",
+    "Elegir otra carpeta",
+    "Scegli un'altra cartella"
+  ],
+  "Scan Desktop": [
+    "Сканировать стол",
+    "Analyser le Bureau",
+    "Desktop durchsuchen",
+    "Analizar Escritorio",
+    "Analizza Desktop"
+  ],
+  "Back to folders": [
+    "Назад к папкам",
+    "Retour aux dossiers",
+    "Zurück zu Ordnern",
+    "Volver a carpetas",
+    "Torna alle cartelle"
+  ],
+  "Original path → destination": [
+    "Исходный путь → назначение",
+    "Chemin d'origine → destination",
+    "Ursprungspfad → Ziel",
+    "Ruta original → destino",
+    "Percorso originale → destinazione"
+  ],
+  "AI not tested · check it in Settings": [
+    "ИИ не проверен · проверьте в настройках",
+    "IA non testée · voir les paramètres",
+    "KI nicht getestet · siehe Einstellungen",
+    "IA sin probar · revisa Ajustes",
+    "IA non verificata · vai a Impostazioni"
+  ],
+  "Look and feel": [
+    "Оформление",
+    "Apparence",
+    "Darstellung",
+    "Apariencia",
+    "Aspetto"
+  ],
+  "Group opacity": [
+    "Непрозрачность групп",
+    "Opacité des groupes",
+    "Deckkraft der Gruppen",
+    "Opacidad de grupos",
+    "Opacità dei gruppi"
+  ],
+  "AI settings": [
+    "Настройки ИИ",
+    "Paramètres IA",
+    "KI-Einstellungen",
+    "Ajustes de IA",
+    "Impostazioni IA"
+  ],
+  "Save & test AI": [
+    "Сохранить и проверить ИИ",
+    "Enregistrer et tester l'IA",
+    "KI speichern und testen",
+    "Guardar y probar IA",
+    "Salva e prova IA"
+  ],
+  "AI not tested": [
+    "ИИ не проверен",
+    "IA non testée",
+    "KI nicht getestet",
+    "IA sin probar",
+    "IA non verificata"
+  ],
+  "AI suggestions": [
+    "Предложения ИИ",
+    "Suggestions IA",
+    "KI-Vorschläge",
+    "Sugerencias de IA",
+    "Suggerimenti IA"
+  ],
+  "Base URL": [
+    "Базовый URL",
+    "URL de base",
+    "Basis-URL",
+    "URL base",
+    "URL di base"
+  ],
+  "Model": [
+    "Модель",
+    "Modèle",
+    "Modell",
+    "Modelo",
+    "Modello"
+  ],
+  "New token": [
+    "Новый токен",
+    "Nouveau jeton",
+    "Neues Token",
+    "Nuevo token",
+    "Nuovo token"
+  ],
+  "Leave the token blank to keep the saved one.": [
+    "Оставьте поле пустым, чтобы сохранить текущий токен.",
+    "Laissez ce champ vide pour conserver le jeton actuel.",
+    "Leer lassen, um das gespeicherte Token zu behalten.",
+    "Déjalo vacío para conservar el token guardado.",
+    "Lascia vuoto per conservare il token salvato."
+  ],
+  "Updates · v{}": [
+    "Обновления · v{}",
+    "Mises à jour · v{}",
+    "Updates · v{}",
+    "Actualizaciones · v{}",
+    "Aggiornamenti · v{}"
+  ],
+  "Your space": [
+    "Ваше пространство",
+    "Votre espace",
+    "Dein Bereich",
+    "Tu espacio",
+    "Il tuo spazio"
+  ],
+  "Give everyday files a home.": [
+    "Найдите место повседневным файлам.",
+    "Une place pour vos fichiers quotidiens.",
+    "Ein Zuhause für alltägliche Dateien.",
+    "Un lugar para tus archivos cotidianos.",
+    "Un posto per i file di ogni giorno."
+  ],
+  "Organize your Desktop": [
+    "Порядок на рабочем столе",
+    "Organisez votre Bureau",
+    "Desktop organisieren",
+    "Organiza tu Escritorio",
+    "Organizza il Desktop"
+  ],
+  "See a plan first. Move files only when you confirm.": [
+    "Сначала план. Файлы переместятся после подтверждения.",
+    "Vérifiez le plan avant de confirmer le déplacement.",
+    "Erst den Plan prüfen, dann das Verschieben bestätigen.",
+    "Revisa el plan y confirma antes de mover archivos.",
+    "Controlla il piano e conferma prima di spostare i file."
+  ],
+  "Check every destination before moving the originals.": [
+    "Проверьте назначения перед перемещением оригиналов.",
+    "Vérifiez chaque destination avant le déplacement.",
+    "Vor dem Verschieben jedes Ziel prüfen.",
+    "Revisa cada destino antes de mover los originales.",
+    "Controlla ogni destinazione prima di spostare gli originali."
+  ],
+  "Make it yours": [
+    "Настройте под себя",
+    "À votre goût",
+    "Nach deinem Geschmack",
+    "A tu gusto",
+    "Come piace a te"
+  ],
+  "A few small preferences.": [
+    "Несколько простых настроек.",
+    "Quelques préférences simples.",
+    "Einige einfache Einstellungen.",
+    "Unas preferencias sencillas.",
+    "Alcune semplici preferenze."
+  ],
+  "Start with your Desktop": [
+    "Начните с рабочего стола",
+    "Commencez par votre Bureau",
+    "Mit dem Desktop beginnen",
+    "Empieza por tu Escritorio",
+    "Inizia dal Desktop"
+  ],
+  "Use the files already on your Desktop. Existing folders stay in place.": [
+    "Используйте файлы рабочего стола. Существующие папки останутся на месте.",
+    "Utilisez les fichiers du Bureau. Les dossiers existants restent en place.",
+    "Dateien auf dem Desktop nutzen. Vorhandene Ordner bleiben unverändert.",
+    "Usa los archivos del Escritorio. Las carpetas existentes se quedan donde están.",
+    "Usa i file del Desktop. Le cartelle esistenti restano al loro posto."
+  ],
+  "Your folder plan starts here": [
+    "Здесь появится план папок",
+    "Votre plan de dossiers commence ici",
+    "Hier beginnt dein Ordnerplan",
+    "Aquí empieza tu plan de carpetas",
+    "Qui inizia il piano delle cartelle"
+  ],
+  "Scan your Desktop to see proposed folders and their files. Nothing moves yet.": [
+    "Сканируйте рабочий стол для предложений. Файлы пока не перемещаются.",
+    "Analysez le Bureau pour voir les dossiers proposés. Rien ne bouge encore.",
+    "Desktop durchsuchen, um Vorschläge zu sehen. Es wird noch nichts verschoben.",
+    "Analiza el Escritorio para ver carpetas sugeridas. Aún no se mueve nada.",
+    "Analizza il Desktop per vedere le cartelle suggerite. Nulla viene ancora spostato."
+  ],
+  "Choose Suggest folders or Ask my AI to preview folders for these files.": [
+    "Выберите «Предложить папки» или «Спросить мой ИИ».",
+    "Choisissez Proposer des dossiers ou Demander à mon IA.",
+    "Ordner vorschlagen oder Meine KI fragen auswählen.",
+    "Elige Sugerir carpetas o Consultar mi IA.",
+    "Scegli Suggerisci cartelle o Chiedi alla mia IA."
+  ],
+  "Just a preview. You're in control.": [
+    "Это только предварительный просмотр.",
+    "Un aperçu seulement. Vous décidez.",
+    "Nur eine Vorschau. Du entscheidest.",
+    "Solo es una vista previa. Tú decides.",
+    "È solo un'anteprima. Decidi tu."
+  ],
+  "Prefer floating groups? This keeps all original files where they are.": [
+    "Предпочитаете плавающие группы? Оригиналы останутся на месте.",
+    "Vous préférez les groupes flottants ? Les originaux restent en place.",
+    "Lieber schwebende Gruppen? Originaldateien bleiben an ihrem Platz.",
+    "¿Prefieres grupos flotantes? Los originales se quedan en su sitio.",
+    "Preferisci gruppi mobili? Gli originali restano dove sono."
+  ],
+  "Start with a folder": [
+    "Начните с папки",
+    "Commencez par un dossier",
+    "Mit einem Ordner beginnen",
+    "Empieza por una carpeta",
+    "Inizia da una cartella"
+  ],
+  "Add your Desktop or any folder you like.\nYour originals stay right where they are.": [
+    "Добавьте рабочий стол или другую папку.\nОригиналы останутся на месте.",
+    "Ajoutez votre Bureau ou un autre dossier.\nLes originaux restent en place.",
+    "Desktop oder einen anderen Ordner hinzufügen.\nOriginale bleiben unverändert.",
+    "Añade el Escritorio u otra carpeta.\nLos originales se quedan donde están.",
+    "Aggiungi il Desktop o un'altra cartella.\nGli originali restano dove sono."
+  ],
+  "A helping hand, if you want it": [
+    "Помощь по вашему желанию",
+    "Un coup de main, si vous le souhaitez",
+    "Hilfe, wenn du möchtest",
+    "Una ayuda, si la quieres",
+    "Un aiuto, se lo vuoi"
+  ],
+  "Connect your own AI for grouping ideas.": [
+    "Подключите свой ИИ для идей группировки.",
+    "Connectez votre IA pour des idées de classement.",
+    "Eigene KI für Gruppierungsideen verbinden.",
+    "Conecta tu IA para ideas de agrupación.",
+    "Collega la tua IA per idee di raggruppamento."
+  ],
+  "Remove saved token": [
+    "Удалить сохранённый токен",
+    "Supprimer le jeton enregistré",
+    "Gespeichertes Token entfernen",
+    "Eliminar token guardado",
+    "Rimuovi token salvato"
+  ],
+  "Choose accent...": [
+    "Выбрать акцент…",
+    "Choisir l'accent…",
+    "Akzentfarbe wählen…",
+    "Elegir acento…",
+    "Scegli accento…"
+  ],
+  "Check for updates on startup": [
+    "Проверять обновления при запуске",
+    "Vérifier les mises à jour au démarrage",
+    "Beim Start nach Updates suchen",
+    "Buscar actualizaciones al iniciar",
+    "Controlla aggiornamenti all'avvio"
+  ],
+  "Check for updates": [
+    "Проверить обновления",
+    "Vérifier les mises à jour",
+    "Nach Updates suchen",
+    "Buscar actualizaciones",
+    "Controlla aggiornamenti"
+  ],
+  "Download and install": [
+    "Скачать и установить",
+    "Télécharger et installer",
+    "Herunterladen und installieren",
+    "Descargar e instalar",
+    "Scarica e installa"
+  ],
+  "No check completed in this session.": [
+    "Обновления ещё не проверялись.",
+    "Aucune vérification cette session.",
+    "In dieser Sitzung noch nicht geprüft.",
+    "Aún no se ha comprobado en esta sesión.",
+    "Nessun controllo in questa sessione."
+  ],
+  "Ready.": [
+    "Готово.",
+    "Prêt.",
+    "Bereit.",
+    "Listo.",
+    "Pronto."
+  ],
+  "Save and quit": [
+    "Сохранить и выйти",
+    "Enregistrer et quitter",
+    "Speichern und beenden",
+    "Guardar y salir",
+    "Salva ed esci"
+  ],
+  "Done": [
+    "Готово",
+    "Terminé",
+    "Fertig",
+    "Hecho",
+    "Fatto"
+  ],
+  "file": [
+    "файл",
+    "fichier",
+    "Datei",
+    "archivo",
+    "file"
+  ],
+  "files": [
+    "файлов",
+    "fichiers",
+    "Dateien",
+    "archivos",
+    "file"
+  ],
+  "item": [
+    "элемент",
+    "élément",
+    "Element",
+    "elemento",
+    "elemento"
+  ],
+  "items": [
+    "элементов",
+    "éléments",
+    "Elemente",
+    "elementos",
+    "elementi"
+  ],
+  "HTTP is unencrypted. Avoid public Wi-Fi.": [
+    "HTTP не зашифрован. Избегайте публичного Wi-Fi.",
+    "HTTP n'est pas chiffré. Évitez le Wi-Fi public.",
+    "HTTP ist unverschlüsselt. Öffentliches WLAN meiden.",
+    "HTTP no está cifrado. Evita redes Wi-Fi públicas.",
+    "HTTP non è cifrato. Evita il Wi-Fi pubblico."
+  ],
+  "AI settings changed · not tested": [
+    "Настройки ИИ изменены · не проверены",
+    "Paramètres IA modifiés · non testés",
+    "KI-Einstellungen geändert · nicht getestet",
+    "Ajustes de IA modificados · sin probar",
+    "Impostazioni IA modificate · non verificate"
+  ],
+  "Error: {}": [
+    "Ошибка: {}",
+    "Erreur : {}",
+    "Fehler: {}",
+    "Error: {}",
+    "Errore: {}"
+  ],
+  "DesktopOrganizer could not start": [
+    "Не удалось запустить DesktopOrganizer",
+    "Impossible de démarrer DesktopOrganizer",
+    "DesktopOrganizer konnte nicht starten",
+    "No se pudo iniciar DesktopOrganizer",
+    "Impossibile avviare DesktopOrganizer"
+  ],
+  "Folder unavailable. Choose another folder to keep organizing your files.": [
+    "Папка недоступна. Выберите другую.",
+    "Dossier indisponible. Choisissez-en un autre.",
+    "Ordner nicht verfügbar. Anderen Ordner wählen.",
+    "Carpeta no disponible. Elige otra.",
+    "Cartella non disponibile. Scegline un'altra."
+  ],
+  "Tray is unavailable. Use Save and quit to exit; settings remain accessible.": [
+    "Трей недоступен. Для выхода выберите «Сохранить и выйти».",
+    "Zone de notification indisponible. Utilisez Enregistrer et quitter.",
+    "Infobereich nicht verfügbar. Speichern und beenden verwenden.",
+    "Bandeja no disponible. Usa Guardar y salir.",
+    "Area di notifica non disponibile. Usa Salva ed esci."
+  ],
+  "Startup update check unavailable: {}": [
+    "Проверка обновлений при запуске недоступна: {}",
+    "Vérification au démarrage indisponible : {}",
+    "Updateprüfung beim Start nicht verfügbar: {}",
+    "Comprobación al iniciar no disponible: {}",
+    "Controllo all'avvio non disponibile: {}"
+  ],
+  "Previous update failed: {}": [
+    "Предыдущее обновление не удалось: {}",
+    "Échec de la mise à jour précédente : {}",
+    "Vorheriges Update fehlgeschlagen: {}",
+    "La actualización anterior falló: {}",
+    "Aggiornamento precedente non riuscito: {}"
+  ],
+  "Session ending. Recent changes are saved by the background writer.": [
+    "Сеанс завершается. Последние изменения сохраняются в фоне.",
+    "Fin de session. Les modifications sont enregistrées en arrière-plan.",
+    "Sitzung endet. Änderungen werden im Hintergrund gespeichert.",
+    "La sesión termina. Los cambios se guardan en segundo plano.",
+    "Sessione in chiusura. Salvataggio in background."
+  ],
+  "Item arranged. Original files stay in place.": [
+    "Элемент упорядочен. Оригиналы остались на месте.",
+    "Élément organisé. Les originaux restent en place.",
+    "Element angeordnet. Originale bleiben unverändert.",
+    "Elemento organizado. Los originales siguen en su sitio.",
+    "Elemento disposto. Gli originali restano dove sono."
+  ],
+  "{} — {} items": [
+    "{} — элементов: {}",
+    "{} — {} éléments",
+    "{} — {} Elemente",
+    "{} — {} elementos",
+    "{} — {} elementi"
+  ],
+  "Wait for the current operation before quitting": [
+    "Дождитесь завершения операции перед выходом",
+    "Attendez la fin de l'opération avant de quitter",
+    "Vor dem Beenden auf den Vorgang warten",
+    "Espera a que termine la operación antes de salir",
+    "Attendi il termine dell'operazione prima di uscire"
+  ],
+  "Saving before exit...": [
+    "Сохранение перед выходом…",
+    "Enregistrement avant de quitter…",
+    "Speichern vor dem Beenden…",
+    "Guardando antes de salir…",
+    "Salvataggio prima dell'uscita…"
+  ],
+  "Wait for the current background operation": [
+    "Дождитесь завершения фоновой операции",
+    "Attendez la fin de l'opération en arrière-plan",
+    "Auf den Hintergrundvorgang warten",
+    "Espera a que termine la operación en segundo plano",
+    "Attendi l'operazione in background"
+  ],
+  "Windows could not locate your Desktop. Choose a folder instead.": [
+    "Windows не нашла рабочий стол. Выберите папку.",
+    "Bureau introuvable. Choisissez un dossier.",
+    "Windows findet den Desktop nicht. Ordner wählen.",
+    "Windows no encontró el Escritorio. Elige una carpeta.",
+    "Windows non trova il Desktop. Scegli una cartella."
+  ],
+  "Choose the source folder. Importing does not move files.": [
+    "Выберите исходную папку. Импорт не перемещает файлы.",
+    "Choisissez le dossier source. L'import ne déplace rien.",
+    "Quellordner wählen. Import verschiebt keine Dateien.",
+    "Elige la carpeta de origen. Importar no mueve archivos.",
+    "Scegli la cartella di origine. L'importazione non sposta file."
+  ],
+  "Choose an absolute source folder": [
+    "Укажите полный путь исходной папки",
+    "Choisissez un chemin source absolu",
+    "Absoluten Quellordner wählen",
+    "Elige una ruta de origen absoluta",
+    "Scegli un percorso di origine assoluto"
+  ],
+  "Importing folder metadata in the background...": [
+    "Импорт метаданных папки в фоне…",
+    "Import des métadonnées en arrière-plan…",
+    "Ordnermetadaten werden im Hintergrund importiert…",
+    "Importando metadatos en segundo plano…",
+    "Importazione metadati in background…"
+  ],
+  "Maximum of 40 groups reached": [
+    "Достигнут предел в 40 групп",
+    "Limite de 40 groupes atteinte",
+    "Höchstzahl von 40 Gruppen erreicht",
+    "Se alcanzó el límite de 40 grupos",
+    "Raggiunto il limite di 40 gruppi"
+  ],
+  "Enter a group name of 1-60 characters": [
+    "Введите имя группы длиной 1–60 символов",
+    "Saisissez un nom de groupe de 1 à 60 caractères",
+    "Gruppenname mit 1–60 Zeichen eingeben",
+    "Escribe un nombre de grupo de 1 a 60 caracteres",
+    "Inserisci un nome di gruppo di 1–60 caratteri"
+  ],
+  "Keep at least one group": [
+    "Должна остаться хотя бы одна группа",
+    "Conservez au moins un groupe",
+    "Mindestens eine Gruppe behalten",
+    "Mantén al menos un grupo",
+    "Mantieni almeno un gruppo"
+  ],
+  "Select a proposed group first": [
+    "Сначала выберите предложенную группу",
+    "Sélectionnez d'abord un groupe proposé",
+    "Zuerst eine vorgeschlagene Gruppe auswählen",
+    "Selecciona primero un grupo propuesto",
+    "Seleziona prima un gruppo suggerito"
+  ],
+  "Select files included in this preview": [
+    "Выберите файлы из этого предпросмотра",
+    "Sélectionnez les fichiers de cet aperçu",
+    "Dateien aus dieser Vorschau auswählen",
+    "Selecciona archivos de esta vista previa",
+    "Seleziona i file di questa anteprima"
+  ],
+  "Choose at least one file to organize.": [
+    "Выберите хотя бы один файл.",
+    "Choisissez au moins un fichier.",
+    "Mindestens eine Datei auswählen.",
+    "Elige al menos un archivo.",
+    "Scegli almeno un file."
+  ],
+  "Folder proposal ready. Review names, then choose Review file moves. Originals have not moved.": [
+    "Папки предложены. Проверьте имена и перемещения. Оригиналы не перемещены.",
+    "Dossiers proposés. Vérifiez les noms puis les déplacements. Les originaux sont inchangés.",
+    "Ordnervorschlag bereit. Namen und Verschiebungen prüfen. Originale unverändert.",
+    "Propuesta lista. Revisa los nombres y movimientos. Los originales no se han movido.",
+    "Proposta pronta. Controlla nomi e spostamenti. Gli originali non sono stati spostati."
+  ],
+  "Save your AI settings before asking for groups.": [
+    "Сохраните настройки ИИ перед запросом.",
+    "Enregistrez les paramètres IA avant de demander des groupes.",
+    "KI-Einstellungen vor der Anfrage speichern.",
+    "Guarda los ajustes de IA antes de pedir grupos.",
+    "Salva le impostazioni IA prima di chiedere gruppi."
+  ],
+  "Check the explicit metadata sharing consent first": [
+    "Сначала разрешите передачу метаданных",
+    "Autorisez d'abord le partage des métadonnées",
+    "Zuerst der Metadatenfreigabe zustimmen",
+    "Autoriza primero compartir los metadatos",
+    "Autorizza prima la condivisione dei metadati"
+  ],
+  "AI supports up to 200 files at once. Use Suggest folders for all files or select a smaller batch.": [
+    "ИИ обрабатывает до 200 файлов. Выберите меньше или используйте офлайн-предложения.",
+    "L'IA accepte 200 fichiers maximum. Réduisez la sélection ou utilisez les suggestions locales.",
+    "KI unterstützt bis zu 200 Dateien. Weniger auswählen oder lokale Vorschläge nutzen.",
+    "La IA admite hasta 200 archivos. Reduce la selección o usa sugerencias locales.",
+    "L'IA supporta fino a 200 file. Riduci la selezione o usa i suggerimenti locali."
+  ],
+  "Requesting metadata-only AI suggestions. Offline grouping remains available if the provider fails.": [
+    "Запрос предложений ИИ по метаданным. Офлайн-группировка остаётся доступной.",
+    "Demande de suggestions IA par métadonnées. Le classement local reste disponible.",
+    "KI-Vorschläge nur aus Metadaten werden angefordert. Lokale Gruppierung bleibt verfügbar.",
+    "Solicitando sugerencias de IA solo con metadatos. Sigue disponible la agrupación local.",
+    "Richiesta suggerimenti IA solo dai metadati. Il raggruppamento locale resta disponibile."
+  ],
+  "Visual groups applied. No files were moved.": [
+    "Визуальные группы применены. Файлы не перемещались.",
+    "Groupes visuels appliqués. Aucun fichier déplacé.",
+    "Visuelle Gruppen angewendet. Keine Dateien verschoben.",
+    "Grupos visuales aplicados. No se movió ningún archivo.",
+    "Gruppi visivi applicati. Nessun file spostato."
+  ],
+  "Validating every source, destination and content fingerprint...": [
+    "Проверка источников, назначений и содержимого…",
+    "Vérification des sources, destinations et contenus…",
+    "Quellen, Ziele und Inhalte werden geprüft…",
+    "Validando orígenes, destinos y contenidos…",
+    "Verifica di origini, destinazioni e contenuti…"
+  ],
+  "The plan changed. Review file moves again.": [
+    "План изменился. Проверьте перемещения снова.",
+    "Le plan a changé. Vérifiez à nouveau les déplacements.",
+    "Plan geändert. Verschiebungen erneut prüfen.",
+    "El plan cambió. Revisa de nuevo los movimientos.",
+    "Il piano è cambiato. Controlla di nuovo gli spostamenti."
+  ],
+  "Preview file moves first": [
+    "Сначала просмотрите перемещения",
+    "Vérifiez d'abord les déplacements",
+    "Zuerst die Verschiebungen ansehen",
+    "Revisa primero los movimientos",
+    "Controlla prima gli spostamenti"
+  ],
+  "Undo or resolve the previous operation before starting another. Its journal is preserved.": [
+    "Отмените или завершите предыдущую операцию. Журнал сохранён.",
+    "Annulez ou résolvez l'opération précédente. Son journal est conservé.",
+    "Vorherigen Vorgang rückgängig machen oder klären. Protokoll bleibt erhalten.",
+    "Deshaz o resuelve la operación anterior. Su registro se conserva.",
+    "Annulla o risolvi l'operazione precedente. Il registro viene conservato."
+  ],
+  "Move {} files exactly as shown in the scrollable preview?\nNo existing file will be overwritten. Undo uses the saved operation journal.": [
+    "Переместить {} файлов как показано?\nСуществующие файлы не будут перезаписаны. Отмена использует сохранённый журнал.",
+    "Déplacer {} fichiers comme indiqué ?\nAucun fichier existant ne sera écrasé. L'annulation utilise le journal enregistré.",
+    "{} Dateien wie gezeigt verschieben?\nBestehende Dateien werden nicht überschrieben. Rückgängig nutzt das gespeicherte Protokoll.",
+    "¿Mover {} archivos como se muestra?\nNo se sobrescribe ningún archivo. Deshacer usa el registro guardado.",
+    "Spostare {} file come mostrato?\nNessun file esistente sarà sovrascritto. L'annullamento usa il registro salvato."
+  ],
+  "Apply file moves": [
+    "Подтвердить перемещения",
+    "Confirmer les déplacements",
+    "Verschiebungen anwenden",
+    "Aplicar movimientos",
+    "Applica spostamenti"
+  ],
+  "Moving verified files; progress is recorded in operation.json...": [
+    "Перемещение проверенных файлов; ход сохраняется в operation.json…",
+    "Déplacement des fichiers vérifiés ; suivi dans operation.json…",
+    "Geprüfte Dateien werden verschoben; Fortschritt in operation.json…",
+    "Moviendo archivos verificados; progreso en operation.json…",
+    "Spostamento dei file verificati; avanzamento in operation.json…"
+  ],
+  "Recovering the journal and undoing completed moves without overwrites...": [
+    "Восстановление журнала и отмена без перезаписи…",
+    "Récupération du journal et annulation sans écrasement…",
+    "Protokoll wird wiederhergestellt und ohne Überschreiben rückgängig gemacht…",
+    "Recuperando registro y deshaciendo sin sobrescribir…",
+    "Recupero registro e annullamento senza sovrascrivere…"
+  ],
+  "Enter a model name": [
+    "Введите имя модели",
+    "Saisissez un nom de modèle",
+    "Modellnamen eingeben",
+    "Escribe un nombre de modelo",
+    "Inserisci il nome del modello"
+  ],
+  "Opacity must be 60–100%": [
+    "Непрозрачность должна быть 60–100%",
+    "L'opacité doit être de 60 à 100 %",
+    "Deckkraft muss 60–100 % betragen",
+    "La opacidad debe ser del 60 al 100 %",
+    "L'opacità deve essere del 60–100%"
+  ],
+  "AI configured · not tested": [
+    "ИИ настроен · не проверен",
+    "IA configurée · non testée",
+    "KI konfiguriert · nicht getestet",
+    "IA configurada · sin probar",
+    "IA configurata · non verificata"
+  ],
+  "Saving settings…": [
+    "Сохранение настроек…",
+    "Enregistrement des paramètres…",
+    "Einstellungen werden gespeichert…",
+    "Guardando ajustes…",
+    "Salvataggio impostazioni…"
+  ],
+  "Settings saved.": [
+    "Настройки сохранены.",
+    "Paramètres enregistrés.",
+    "Einstellungen gespeichert.",
+    "Ajustes guardados.",
+    "Impostazioni salvate."
+  ],
+  "Settings saved. Preparing restart helper...": [
+    "Настройки сохранены. Подготовка перезапуска…",
+    "Paramètres enregistrés. Préparation du redémarrage…",
+    "Einstellungen gespeichert. Neustart wird vorbereitet…",
+    "Ajustes guardados. Preparando reinicio…",
+    "Impostazioni salvate. Preparazione riavvio…"
+  ],
+  "Checking AI…": [
+    "Проверка ИИ…",
+    "Vérification de l'IA…",
+    "KI wird geprüft…",
+    "Probando IA…",
+    "Verifica IA…"
+  ],
+  "Testing the selected AI model. No file names are sent.": [
+    "Проверка модели ИИ. Имена файлов не передаются.",
+    "Test du modèle IA. Aucun nom de fichier n'est envoyé.",
+    "KI-Modell wird getestet. Keine Dateinamen werden gesendet.",
+    "Probando el modelo de IA. No se envían nombres de archivo.",
+    "Verifica del modello IA. Nessun nome di file viene inviato."
+  ],
+  "Checking the canonical GitHub repository...": [
+    "Проверка официального репозитория GitHub…",
+    "Vérification du dépôt GitHub officiel…",
+    "Offizielles GitHub-Repository wird geprüft…",
+    "Comprobando el repositorio oficial de GitHub…",
+    "Controllo del repository GitHub ufficiale…"
+  ],
+  "Check for an available compatible release first": [
+    "Сначала проверьте наличие совместимого обновления",
+    "Vérifiez d'abord les mises à jour compatibles",
+    "Zuerst nach kompatiblem Update suchen",
+    "Busca primero una versión compatible",
+    "Cerca prima una versione compatibile"
+  ],
+  "Downloading update: 0%. The current executable and settings are preserved.": [
+    "Загрузка обновления: 0%. Текущий EXE и настройки сохранены.",
+    "Téléchargement : 0 %. L'exécutable et les paramètres sont conservés.",
+    "Update wird geladen: 0 %. Aktuelle EXE und Einstellungen bleiben erhalten.",
+    "Descargando: 0 %. Se conservan el ejecutable y los ajustes.",
+    "Download: 0%. Eseguibile e impostazioni attuali vengono conservati."
+  ],
+  "References removed. Original files were left in place.": [
+    "Ссылки удалены. Оригинальные файлы остались на месте.",
+    "Références retirées. Les fichiers originaux restent en place.",
+    "Verweise entfernt. Originaldateien bleiben unverändert.",
+    "Referencias eliminadas. Los originales siguen en su sitio.",
+    "Riferimenti rimossi. Gli originali restano al loro posto."
+  ],
+  "Drop rejected: wait for the current task or drop at most 2000 items.": [
+    "Перетаскивание отклонено: дождитесь задачи; максимум 2000 элементов.",
+    "Dépôt refusé : attendez la tâche en cours, maximum 2 000 éléments.",
+    "Ablegen abgelehnt: auf Aufgabe warten, höchstens 2000 Elemente.",
+    "Arrastre rechazado: espera a la tarea, máximo 2000 elementos.",
+    "Rilascio rifiutato: attendi l'attività, massimo 2000 elementi."
+  ],
+  "Validating dropped references...": [
+    "Проверка перетащенных ссылок…",
+    "Vérification des références déposées…",
+    "Abgelegte Verweise werden geprüft…",
+    "Validando referencias arrastradas…",
+    "Verifica dei riferimenti trascinati…"
+  ],
+  "Connected · {}": [
+    "Подключено · {}",
+    "Connecté · {}",
+    "Verbunden · {}",
+    "Conectado · {}",
+    "Connesso · {}"
+  ],
+  "AI folder proposal ready. Choose Review file moves to check the destinations.": [
+    "Папки ИИ готовы. Проверьте назначения перемещений.",
+    "Proposition IA prête. Vérifiez les destinations des déplacements.",
+    "KI-Ordnervorschlag bereit. Ziele der Verschiebungen prüfen.",
+    "Propuesta de IA lista. Revisa los destinos de los movimientos.",
+    "Proposta IA pronta. Controlla le destinazioni degli spostamenti."
+  ],
+  "Desktop organized. Your files are in the reviewed folders. Undo moves is available.": [
+    "Рабочий стол упорядочен. Файлы в проверенных папках. Доступна отмена.",
+    "Bureau organisé. Fichiers dans les dossiers validés. Annulation disponible.",
+    "Desktop organisiert. Dateien in den geprüften Ordnern. Rückgängig verfügbar.",
+    "Escritorio organizado. Archivos en carpetas revisadas. Puedes deshacer.",
+    "Desktop organizzato. File nelle cartelle controllate. Annullamento disponibile."
+  ],
+  "Operation stopped. Some earlier moves may have completed. Use Undo last file operation to recover the persisted journal.": [
+    "Операция остановлена. Часть файлов могла переместиться. Используйте отмену перемещений.",
+    "Opération arrêtée. Certains déplacements ont pu finir. Utilisez l'annulation avec le journal.",
+    "Vorgang gestoppt. Einige Dateien könnten verschoben sein. Rückgängig mit dem Protokoll verwenden.",
+    "Operación detenida. Puede haber movimientos completados. Usa Deshacer con el registro.",
+    "Operazione interrotta. Alcuni spostamenti possono essere completati. Usa Annulla con il registro."
+  ],
+  "Completed moves were undone. Changed files and occupied paths are never overwritten.": [
+    "Перемещения отменены. Изменённые файлы и занятые пути не перезаписываются.",
+    "Déplacements annulés. Fichiers modifiés et chemins occupés ne sont jamais écrasés.",
+    "Verschiebungen rückgängig. Geänderte Dateien und belegte Pfade werden nie überschrieben.",
+    "Movimientos deshechos. Nunca se sobrescriben archivos modificados ni rutas ocupadas.",
+    "Spostamenti annullati. File modificati e percorsi occupati non vengono mai sovrascritti."
+  ],
+  "Operation journal reconciled. Use Undo last file operation to reverse completed moves.": [
+    "Журнал восстановлен. Используйте отмену для выполненных перемещений.",
+    "Journal réconcilié. Utilisez l'annulation pour les déplacements terminés.",
+    "Protokoll abgeglichen. Abgeschlossene Verschiebungen lassen sich rückgängig machen.",
+    "Registro conciliado. Usa Deshacer para revertir movimientos completados.",
+    "Registro riconciliato. Usa Annulla per gli spostamenti completati."
+  ],
+  "The operation journal needs attention; preserve it and resolve conflicts before further moves": [
+    "Журнал требует внимания; сохраните его и устраните конфликты",
+    "Le journal nécessite une intervention ; conservez-le et résolvez les conflits",
+    "Protokoll braucht Aufmerksamkeit; erhalten und Konflikte lösen",
+    "El registro necesita atención; consérvalo y resuelve los conflictos",
+    "Il registro richiede attenzione; conservalo e risolvi i conflitti"
+  ],
+  "Version {} is available. Download and install will close and restart this application.": [
+    "Доступна версия {}. Установка закроет и перезапустит приложение.",
+    "Version {} disponible. L'installation ferme et redémarre l'application.",
+    "Version {} verfügbar. Installation schließt und startet die App neu.",
+    "Versión {} disponible. La instalación cierra y reinicia la aplicación.",
+    "Versione {} disponibile. L'installazione chiude e riavvia l'app."
+  ],
+  "DesktopOrganizer {} is available in Settings / Updates.": [
+    "DesktopOrganizer {} доступен в настройках обновлений.",
+    "DesktopOrganizer {} disponible dans les paramètres des mises à jour.",
+    "DesktopOrganizer {} in den Update-Einstellungen verfügbar.",
+    "DesktopOrganizer {} disponible en Ajustes de actualizaciones.",
+    "DesktopOrganizer {} disponibile nelle impostazioni aggiornamenti."
+  ],
+  "The installed version is up to date on the stable channel.": [
+    "Установлена актуальная стабильная версия.",
+    "La version stable installée est à jour.",
+    "Installierte stabile Version ist aktuell.",
+    "La versión estable instalada está actualizada.",
+    "La versione stabile installata è aggiornata."
+  ],
+  "Update check failed: {}": [
+    "Не удалось проверить обновления: {}",
+    "Échec de la vérification : {}",
+    "Updateprüfung fehlgeschlagen: {}",
+    "Error al buscar actualizaciones: {}",
+    "Controllo aggiornamenti non riuscito: {}"
+  ],
+  "Downloading update: {}% ({} / {} bytes)": [
+    "Загрузка обновления: {}% ({} / {} байт)",
+    "Téléchargement : {} % ({} / {} octets)",
+    "Update wird geladen: {} % ({} / {} Bytes)",
+    "Descargando: {} % ({} / {} bytes)",
+    "Download: {}% ({} / {} byte)"
+  ],
+  "Verified update downloaded. Saving and restarting...": [
+    "Проверенное обновление загружено. Сохранение и перезапуск…",
+    "Mise à jour vérifiée téléchargée. Enregistrement et redémarrage…",
+    "Geprüftes Update geladen. Speichern und Neustarten…",
+    "Actualización verificada descargada. Guardando y reiniciando…",
+    "Aggiornamento verificato scaricato. Salvataggio e riavvio…"
+  ],
+  "Update download failed: {}": [
+    "Загрузка обновления не удалась: {}",
+    "Échec du téléchargement : {}",
+    "Update-Download fehlgeschlagen: {}",
+    "Error al descargar actualización: {}",
+    "Download aggiornamento non riuscito: {}"
+  ],
+  "Move {} files": [
+    "Переместить {} файлов",
+    "Déplacer {} fichiers",
+    "{} Dateien verschieben",
+    "Mover {} archivos",
+    "Sposta {} file"
+  ],
+  "Check each destination, then confirm to move the originals. Shortcuts' targets stay in place.": [
+    "Проверьте назначения и подтвердите. Цели ярлыков останутся на месте.",
+    "Vérifiez les destinations puis confirmez. Les cibles des raccourcis restent en place.",
+    "Ziele prüfen, dann bestätigen. Verknüpfungsziele bleiben unverändert.",
+    "Revisa los destinos y confirma. Los destinos de los accesos directos no se mueven.",
+    "Controlla le destinazioni e conferma. Le destinazioni dei collegamenti non si spostano."
+  ],
+  "AI settings changed. Save and test again.": [
+    "Настройки ИИ изменены. Сохраните и проверьте снова.",
+    "Paramètres IA modifiés. Enregistrez et testez à nouveau.",
+    "KI-Einstellungen geändert. Speichern und erneut testen.",
+    "Ajustes de IA modificados. Guarda y prueba de nuevo.",
+    "Impostazioni IA modificate. Salva e prova di nuovo."
+  ],
+  "AI connection verified. Scan your Desktop, then use Ask my AI for folder suggestions.": [
+    "Подключение ИИ проверено. Сканируйте стол и запросите предложения.",
+    "Connexion IA vérifiée. Analysez le Bureau puis demandez des suggestions.",
+    "KI-Verbindung geprüft. Desktop durchsuchen und KI-Vorschläge anfordern.",
+    "Conexión IA verificada. Analiza el Escritorio y pide sugerencias.",
+    "Connessione IA verificata. Analizza il Desktop e chiedi suggerimenti."
+  ],
+  "AI connection failed · check settings": [
+    "Ошибка подключения ИИ · проверьте настройки",
+    "Échec de connexion IA · vérifiez les paramètres",
+    "KI-Verbindung fehlgeschlagen · Einstellungen prüfen",
+    "Error de conexión IA · revisa Ajustes",
+    "Connessione IA non riuscita · controlla Impostazioni"
+  ],
+  "{} items ready. Originals stay in place.": [
+    "Элементов готово: {}. Оригиналы на месте.",
+    "{} éléments prêts. Les originaux restent en place.",
+    "{} Elemente bereit. Originale unverändert.",
+    "{} elementos listos. Los originales siguen en su sitio.",
+    "{} elementi pronti. Gli originali restano al loro posto."
+  ],
+  "Found {} files and shortcuts. Review the proposed folders; originals have not moved.": [
+    "Найдено файлов и ярлыков: {}. Проверьте папки; оригиналы не перемещены.",
+    "{} fichiers et raccourcis trouvés. Vérifiez les dossiers ; originaux inchangés.",
+    "{} Dateien und Verknüpfungen gefunden. Ordner prüfen; Originale unverändert.",
+    "{} archivos y accesos directos encontrados. Revisa las carpetas; no se han movido.",
+    "Trovati {} file e collegamenti. Controlla le cartelle; originali non spostati."
+  ],
+  "No loose files or shortcuts to move. Existing folders stay in place.": [
+    "Нет отдельных файлов или ярлыков. Существующие папки остаются на месте.",
+    "Aucun fichier ou raccourci à déplacer. Les dossiers existants restent en place.",
+    "Keine einzelnen Dateien oder Verknüpfungen. Vorhandene Ordner bleiben unverändert.",
+    "No hay archivos sueltos ni accesos directos. Las carpetas existentes no se mueven.",
+    "Nessun file o collegamento da spostare. Le cartelle esistenti restano al loro posto."
+  ],
+  "DesktopOrganizer — Click for settings": [
+    "DesktopOrganizer — нажмите для настроек",
+    "DesktopOrganizer — cliquez pour les paramètres",
+    "DesktopOrganizer — Klicken für Einstellungen",
+    "DesktopOrganizer — clic para Ajustes",
+    "DesktopOrganizer — fai clic per Impostazioni"
+  ],
+  "Windows tray is unavailable; keep the settings window open": [
+    "Трей Windows недоступен; оставьте настройки открытыми",
+    "Zone de notification indisponible ; gardez les paramètres ouverts",
+    "Windows-Infobereich nicht verfügbar; Einstellungen offen lassen",
+    "Bandeja de Windows no disponible; mantén Ajustes abierto",
+    "Area di notifica non disponibile; lascia aperte le Impostazioni"
+  ],
+  "DesktopOrganizer {} is available": [
+    "Доступен DesktopOrganizer {}",
+    "DesktopOrganizer {} disponible",
+    "DesktopOrganizer {} verfügbar",
+    "DesktopOrganizer {} disponible",
+    "DesktopOrganizer {} disponibile"
+  ],
+  "Open Settings / Updates to review, download and install. Nothing is downloaded automatically.": [
+    "Откройте настройки обновлений. Загрузка начинается только по вашему действию.",
+    "Ouvrez les paramètres des mises à jour. Aucun téléchargement automatique.",
+    "Update-Einstellungen öffnen. Es wird nichts automatisch heruntergeladen.",
+    "Abre los ajustes de actualizaciones. No se descarga nada automáticamente.",
+    "Apri le impostazioni aggiornamenti. Nessun download automatico."
+  ],
+  "Open library / settings": [
+    "Открыть группы и настройки",
+    "Ouvrir groupes et paramètres",
+    "Gruppen und Einstellungen öffnen",
+    "Abrir grupos y ajustes",
+    "Apri gruppi e impostazioni"
+  ],
+  "Collapse / expand": [
+    "Свернуть / развернуть",
+    "Réduire / développer",
+    "Ein-/ausklappen",
+    "Contraer / expandir",
+    "Comprimi / espandi"
+  ],
+  "Hide all groups": [
+    "Скрыть все группы",
+    "Masquer tous les groupes",
+    "Alle Gruppen ausblenden",
+    "Ocultar todos los grupos",
+    "Nascondi tutti i gruppi"
+  ],
+  "Move selected item up\tAlt+Up": [
+    "Переместить элемент выше\tAlt+Up",
+    "Monter l'élément sélectionné\tAlt+Up",
+    "Auswahl nach oben\tAlt+Up",
+    "Subir elemento seleccionado\tAlt+Up",
+    "Sposta elemento in alto\tAlt+Up"
+  ],
+  "Move selected item down\tAlt+Down": [
+    "Переместить элемент ниже\tAlt+Down",
+    "Descendre l'élément sélectionné\tAlt+Down",
+    "Auswahl nach unten\tAlt+Down",
+    "Bajar elemento seleccionado\tAlt+Down",
+    "Sposta elemento in basso\tAlt+Down"
+  ],
+  "Windows could not open this item. The target may have moved, or no associated application is installed.": [
+    "Windows не удалось открыть элемент. Возможно, файл перемещён или нет подходящей программы.",
+    "Windows ne peut pas ouvrir cet élément. Cible déplacée ou application absente.",
+    "Windows kann das Element nicht öffnen. Ziel verschoben oder passende App fehlt.",
+    "Windows no pudo abrir el elemento. Puede haberse movido o faltar una aplicación.",
+    "Windows non apre l'elemento. Il file potrebbe essere spostato o mancare un'app adatta."
+  ],
+  "{} {}  ·  Drag to rearrange": [
+    "{} {}  ·  Перетащите для перестановки",
+    "{} {}  ·  Glissez pour réorganiser",
+    "{} {}  ·  Zum Anordnen ziehen",
+    "{} {}  ·  Arrastra para reordenar",
+    "{} {}  ·  Trascina per riordinare"
+  ],
+  "Your files stay where they are.\nDrop files to add visual references.": [
+    "Файлы остаются на месте.\nПеретащите файлы для добавления ссылок.",
+    "Les fichiers restent en place.\nDéposez-les pour ajouter des références.",
+    "Dateien bleiben unverändert.\nDateien für visuelle Verweise ablegen.",
+    "Los archivos siguen en su sitio.\nArrástralos para añadir referencias.",
+    "I file restano dove sono.\nTrascinali per aggiungere riferimenti."
+  ],
+  "Public releases are unavailable (GitHub 404). The repository may be private or have no published release.": [
+    "Публичные релизы недоступны (GitHub 404). Репозиторий может быть закрыт или без релизов.",
+    "Versions publiques indisponibles (GitHub 404). Dépôt privé ou sans version publiée.",
+    "Öffentliche Releases nicht verfügbar (GitHub 404). Repository privat oder ohne Release.",
+    "Versiones públicas no disponibles (GitHub 404). Repositorio privado o sin versiones.",
+    "Versioni pubbliche non disponibili (GitHub 404). Repository privato o senza versioni."
+  ],
+  "Applications": [
+    "Приложения",
+    "Applications",
+    "Anwendungen",
+    "Aplicaciones",
+    "Applicazioni"
+  ],
+  "Documents": [
+    "Документы",
+    "Documents",
+    "Dokumente",
+    "Documentos",
+    "Documenti"
+  ],
+  "Data": [
+    "Данные",
+    "Données",
+    "Daten",
+    "Datos",
+    "Dati"
+  ],
+  "Images": [
+    "Изображения",
+    "Images",
+    "Bilder",
+    "Imágenes",
+    "Immagini"
+  ],
+  "Video": [
+    "Видео",
+    "Vidéo",
+    "Video",
+    "Vídeo",
+    "Video"
+  ],
+  "Audio": [
+    "Аудио",
+    "Audio",
+    "Audio",
+    "Audio",
+    "Audio"
+  ],
+  "Archives": [
+    "Архивы",
+    "Archives",
+    "Archive",
+    "Archivos",
+    "Archivi"
+  ],
+  "Code": [
+    "Код",
+    "Code",
+    "Code",
+    "Código",
+    "Codice"
+  ],
+  "Other": [
+    "Прочее",
+    "Autres",
+    "Sonstiges",
+    "Otros",
+    "Altro"
+  ],
+  "Folders": [
+    "Папки",
+    "Dossiers",
+    "Ordner",
+    "Carpetas",
+    "Cartelle"
+  ]
+}

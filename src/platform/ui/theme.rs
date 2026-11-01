@@ -20,11 +20,41 @@ pub(super) unsafe fn draw_control(item: *const DRAWITEMSTRUCT) -> LRESULT {
 pub(super) const fn rgb(r: u8, g: u8, b: u8) -> u32 {
     r as u32 | (g as u32) << 8 | (b as u32) << 16
 }
-const NAV: u32 = rgb(239, 243, 249);
-const BG: u32 = rgb(249, 250, 253);
-const INK: u32 = rgb(31, 44, 63);
-const MUTED: u32 = rgb(106, 119, 138);
-const BLUE: u32 = rgb(82, 102, 204);
+pub(super) fn color(r: u8, g: u8, b: u8) -> u32 {
+    if !i18n::dark() {
+        return rgb(r, g, b);
+    }
+    match (r, g, b) {
+        (249, 250, 253) => rgb(17, 23, 33),
+        (239, 243, 249) => rgb(23, 30, 42),
+        (255, 255, 255) => rgb(32, 40, 54),
+        (31, 44, 63) | (43, 54, 69) => rgb(231, 237, 247),
+        (106, 119, 138) | (82, 102, 150) => rgb(166, 181, 202),
+        (82, 102, 204) | (35, 79, 183) => rgb(r, g, b),
+        _ if r as u16 + g as u16 + b as u16 > 680 => rgb(43, 54, 73),
+        _ if r as u16 + g as u16 + b as u16 > 590 => rgb(66, 81, 103),
+        _ => rgb(
+            r.saturating_add((255 - r) / 4),
+            g.saturating_add((255 - g) / 4),
+            b.saturating_add((255 - b) / 4),
+        ),
+    }
+}
+fn nav() -> u32 {
+    color(239, 243, 249)
+}
+fn bg() -> u32 {
+    color(249, 250, 253)
+}
+fn ink() -> u32 {
+    color(31, 44, 63)
+}
+fn muted() -> u32 {
+    color(106, 119, 138)
+}
+fn blue() -> u32 {
+    color(82, 102, 204)
+}
 pub(super) unsafe fn application_icon(instance: HINSTANCE, small: bool) -> Result<HICON> {
     unsafe {
         let mut icon = null_mut();
@@ -46,41 +76,49 @@ pub(super) unsafe fn draw_button(item: *const DRAWITEMSTRUCT) -> LRESULT {
         OWNER_DRAWS.fetch_add(1, Ordering::Relaxed);
         let dc = item.hDC;
         let id = item.CtlID as u16;
-        let nav = matches!(id, PAGE_LIBRARY | PAGE_AI | PAGE_SETTINGS | QUIT);
+        let navigation = matches!(id, PAGE_LIBRARY | PAGE_AI | PAGE_SETTINGS | QUIT);
         let selected = GetWindowLongPtrW(item.hwndItem, GWLP_USERDATA) != 0;
         let primary = matches!(
             id,
             BROWSE | ADD_DESKTOP | PREVIEW_MOVES | APPLY_MOVES | SAVE_SETTINGS
         );
         let pressed = item.itemState & ODS_SELECTED != 0;
-        let background = if nav {
+        let background = if navigation {
             if selected || pressed {
-                rgb(224, 231, 248)
+                color(224, 231, 248)
             } else {
-                NAV
+                nav()
             }
         } else if primary {
-            if pressed { rgb(35, 79, 183) } else { BLUE }
+            if pressed { color(35, 79, 183) } else { blue() }
         } else if pressed {
-            rgb(232, 237, 246)
+            color(232, 237, 246)
         } else {
-            rgb(255, 255, 255)
+            color(255, 255, 255)
         };
-        let color = if primary { rgb(255, 255, 255) } else { INK };
+        let foreground = if primary { rgb(255, 255, 255) } else { ink() };
         let disabled = item.itemState & ODS_DISABLED != 0;
-        fill(dc, item.rcItem, if nav { NAV } else { rgb(255, 255, 255) });
+        fill(
+            dc,
+            item.rcItem,
+            if navigation {
+                nav()
+            } else {
+                color(255, 255, 255)
+            },
+        );
         rounded(
             dc,
             item.rcItem,
             if disabled {
-                rgb(240, 243, 248)
+                color(240, 243, 248)
             } else {
                 background
             },
-            if nav || primary {
+            if navigation || primary {
                 background
             } else {
-                rgb(219, 225, 235)
+                color(219, 225, 235)
             },
             8,
         );
@@ -89,7 +127,7 @@ pub(super) unsafe fn draw_button(item: *const DRAWITEMSTRUCT) -> LRESULT {
         let font = SendMessageW(item.hwndItem, WM_GETFONT, 0, 0);
         let old = SelectObject(dc, font as _);
         SetBkMode(dc, TRANSPARENT as _);
-        SetTextColor(dc, if disabled { MUTED } else { color });
+        SetTextColor(dc, if disabled { muted() } else { foreground });
         let glyph = match id {
             PAGE_LIBRARY => Some(Glyph::Grid),
             PAGE_AI | OFFLINE | REQUEST_AI | AI_SETUP => Some(Glyph::Sparkle),
@@ -122,11 +160,11 @@ pub(super) unsafe fn draw_button(item: *const DRAWITEMSTRUCT) -> LRESULT {
                 y,
                 icon_size,
                 if disabled {
-                    MUTED
-                } else if nav {
-                    if selected { BLUE } else { MUTED }
+                    muted()
+                } else if navigation {
+                    if selected { blue() } else { muted() }
                 } else {
-                    color
+                    foreground
                 },
             );
             rect.left += scale(39, dpi);
@@ -135,7 +173,7 @@ pub(super) unsafe fn draw_button(item: *const DRAWITEMSTRUCT) -> LRESULT {
             rect.left += scale(10, dpi);
             rect.right -= scale(10, dpi);
         }
-        SetTextColor(dc, if disabled { MUTED } else { color });
+        SetTextColor(dc, if disabled { muted() } else { foreground });
         DrawTextW(
             dc,
             text.as_ptr(),
@@ -461,9 +499,55 @@ impl App {
             );
             self.label(
                 3,
-                &format!("Updates · v{}", updates::INSTALLED),
+                &trf!("Updates · v{}", updates::INSTALLED),
                 (240, 518, 700, 24),
             );
+            // Preferences stay visible at the top of Settings and save immediately.
+            for c in &mut self.controls {
+                if matches!(c.page, 3 | 4) && c.rect.1 >= 242 {
+                    c.rect.1 += 40;
+                }
+                if matches!(c.id, FULLSCREEN | ACCENT | OPACITY_SLIDER | OPACITY_VALUE) {
+                    c.rect.1 += 40;
+                }
+                if c.id == STATUS {
+                    c.rect.1 += 40;
+                }
+            }
+            self.label(3, "Language", (240, 150, 80, 24));
+            self.control(
+                LANGUAGE,
+                3,
+                w!("COMBOBOX"),
+                "",
+                CBS_DROPDOWNLIST as u32 | WS_VSCROLL,
+                (326, 144, 268, 220),
+            );
+            for language in Language::ALL {
+                SendMessageW(
+                    self.c(LANGUAGE),
+                    CB_ADDSTRING,
+                    0,
+                    wide(language.name()).as_ptr() as _,
+                );
+            }
+            SendMessageW(
+                self.c(LANGUAGE),
+                CB_SETCURSEL,
+                self.layout.settings.language as usize,
+                0,
+            );
+            self.label(3, "Theme", (620, 150, 80, 24));
+            self.control(
+                THEME,
+                3,
+                w!("COMBOBOX"),
+                "",
+                CBS_DROPDOWNLIST as u32,
+                (710, 144, 250, 120),
+            );
+            self.sync_theme_choices();
+            self.apply_native_theme();
             for id in [RENAME_PROPOSAL, ASSIGN_PROPOSAL, AI_SETUP] {
                 let h = self.c(id);
                 SetWindowLongPtrW(
@@ -495,9 +579,9 @@ impl App {
                         group.name,
                         group.item_ids.len(),
                         if group.item_ids.len() == 1 {
-                            "file"
+                            tr("file")
                         } else {
-                            "files"
+                            tr("files")
                         }
                     ))
                     .as_ptr() as _,
@@ -596,7 +680,7 @@ impl App {
             let mut client = RECT::default();
             GetClientRect(self.hwnd, &mut client);
             let dpi = window_dpi(self.hwnd).max(96);
-            fill(dc, client, BG);
+            fill(dc, client, bg());
             SetBkMode(dc, TRANSPARENT as _);
             let rect = |x, y, w, h| RECT {
                 left: scale(x, dpi) - self.main_scroll.x,
@@ -612,22 +696,30 @@ impl App {
                     right: scale(192, dpi),
                     bottom: client.bottom,
                 },
-                NAV,
+                nav(),
             );
             let (title, subtitle) = match self.page {
-                1 => ("Your space", "Give everyday files a home."),
+                1 => (tr("Your space"), tr("Give everyday files a home.")),
                 2 => (
-                    "Organize your Desktop",
-                    "See a plan first. Move files only when you confirm.",
+                    tr("Organize your Desktop"),
+                    tr("See a plan first. Move files only when you confirm."),
                 ),
                 5 => (
-                    "Review file moves",
-                    "Check every destination before moving the originals.",
+                    tr("Review file moves"),
+                    tr("Check every destination before moving the originals."),
                 ),
-                _ => ("Make it yours", "A few small preferences."),
+                _ => (tr("Make it yours"), tr("A few small preferences.")),
             };
-            heading(dc, title, rect(220, 23, 560, 40), 28, INK, true, dpi);
-            heading(dc, subtitle, rect(220, 70, 760, 24), 14, MUTED, false, dpi);
+            heading(dc, tr(title), rect(220, 23, 560, 40), 28, ink(), true, dpi);
+            heading(
+                dc,
+                tr(subtitle),
+                rect(220, 70, 760, 24),
+                14,
+                muted(),
+                false,
+                dpi,
+            );
             let cards: &[(i32, i32, i32, i32)] = match self.page {
                 1 => &[
                     (220, 104, 760, 96),
@@ -642,17 +734,17 @@ impl App {
                 ],
                 5 => &[(220, 104, 760, 566)],
                 _ => &[
-                    (220, 104, 760, 128),
-                    (220, 242, 760, 212),
-                    (220, 508, 760, 162),
+                    (220, 104, 760, 168),
+                    (220, 282, 760, 212),
+                    (220, 548, 760, 162),
                 ],
             };
             for &(x, y, w, h) in cards {
                 rounded(
                     dc,
                     rect(x, y, w, h),
-                    rgb(255, 255, 255),
-                    rgb(228, 233, 241),
+                    color(255, 255, 255),
+                    color(228, 233, 241),
                     14,
                 );
             }
@@ -664,23 +756,25 @@ impl App {
                         rect(356, 166, 1, 1).left,
                         rect(356, 166, 1, 1).top,
                         scale(56, dpi),
-                        BLUE,
+                        blue(),
                     );
                     heading(
                         dc,
-                        "Start with your Desktop",
+                        tr("Start with your Desktop"),
                         rect(240, 248, 310, 30),
                         19,
-                        INK,
+                        ink(),
                         true,
                         dpi,
                     );
                     heading(
                         dc,
-                        "Use the files already on your Desktop. Existing folders stay in place.",
+                        tr(
+                            "Use the files already on your Desktop. Existing folders stay in place.",
+                        ),
                         rect(240, 288, 310, 54),
                         15,
-                        MUTED,
+                        muted(),
                         false,
                         dpi,
                     );
@@ -692,37 +786,41 @@ impl App {
                         rect(730, 178, 1, 1).left,
                         rect(730, 178, 1, 1).top,
                         scale(44, dpi),
-                        BLUE,
+                        blue(),
                     );
                     heading(
                         dc,
-                        "Your folder plan starts here",
+                        tr("Your folder plan starts here"),
                         rect(594, 254, 346, 30),
                         19,
-                        INK,
+                        ink(),
                         true,
                         dpi,
                     );
                     heading(
                         dc,
                         if self.tidy_items.is_empty() {
-                            "Scan your Desktop to see proposed folders and their files. Nothing moves yet."
+                            tr(
+                                "Scan your Desktop to see proposed folders and their files. Nothing moves yet.",
+                            )
                         } else {
-                            "Choose Suggest folders or Ask my AI to preview folders for these files."
+                            tr(
+                                "Choose Suggest folders or Ask my AI to preview folders for these files.",
+                            )
                         },
                         rect(594, 296, 346, 74),
                         15,
-                        MUTED,
+                        muted(),
                         false,
                         dpi,
                     );
                 } else {
                     heading(
                         dc,
-                        "Just a preview. You're in control.",
+                        tr("Just a preview. You're in control."),
                         rect(590, 396, 370, 22),
                         14,
-                        MUTED,
+                        muted(),
                         false,
                         dpi,
                     );
@@ -730,10 +828,10 @@ impl App {
                 if !self.tidy_items.is_empty() {
                     heading(
                         dc,
-                        "Prefer floating groups? This keeps all original files where they are.",
+                        tr("Prefer floating groups? This keeps all original files where they are."),
                         rect(566, 588, 394, 60),
                         15,
-                        MUTED,
+                        muted(),
                         false,
                         dpi,
                     );
@@ -743,34 +841,35 @@ impl App {
                 // The empty list is intentionally hidden below, so this is the actual empty-state surface.
                 heading(
                     dc,
-                    "Start with a folder",
+                    tr("Start with a folder"),
                     rect(502, 444, 438, 32),
                     19,
-                    INK,
+                    ink(),
                     true,
                     dpi,
                 );
                 heading(
                     dc,
-                    "Add your Desktop or any folder you like.
-Your originals stay right where they are.",
+                    tr(
+                        "Add your Desktop or any folder you like.\nYour originals stay right where they are.",
+                    ),
                     rect(502, 486, 398, 64),
                     15,
-                    MUTED,
+                    muted(),
                     false,
                     dpi,
                 );
             }
             if self.page == 1 {
                 let folder = rect(240, 122, 44, 44);
-                rounded(dc, folder, rgb(255, 244, 216), rgb(255, 244, 216), 10);
+                rounded(dc, folder, color(255, 244, 216), color(255, 244, 216), 10);
                 draw_icon(
                     dc,
                     Glyph::Folder,
                     folder.left + scale(8, dpi),
                     folder.top + scale(8, dpi),
                     scale(28, dpi),
-                    rgb(172, 126, 39),
+                    color(172, 126, 39),
                 );
                 if self.layout.items.is_empty() {
                     draw_icon(
@@ -779,36 +878,36 @@ Your originals stay right where they are.",
                         rect(550, 332, 1, 1).left,
                         rect(550, 332, 1, 1).top,
                         scale(74, dpi),
-                        BLUE,
+                        blue(),
                     );
                 }
             }
             if self.page == 3 && !self.ai_setup_open {
-                let icon = rect(246, 310, 58, 58);
-                rounded(dc, icon, rgb(238, 234, 253), rgb(238, 234, 253), 12);
+                let icon = rect(246, 350, 58, 58);
+                rounded(dc, icon, color(238, 234, 253), color(238, 234, 253), 12);
                 draw_icon(
                     dc,
                     Glyph::Sparkle,
                     icon.left + scale(12, dpi),
                     icon.top + scale(12, dpi),
                     scale(34, dpi),
-                    rgb(122, 97, 190),
+                    color(122, 97, 190),
                 );
                 heading(
                     dc,
-                    "A helping hand, if you want it",
-                    rect(326, 304, 420, 30),
+                    tr("A helping hand, if you want it"),
+                    rect(326, 344, 420, 30),
                     18,
-                    INK,
+                    ink(),
                     true,
                     dpi,
                 );
                 heading(
                     dc,
-                    "Connect your own AI for grouping ideas.",
-                    rect(326, 344, 410, 46),
+                    tr("Connect your own AI for grouping ideas."),
+                    rect(326, 384, 410, 46),
                     14,
-                    MUTED,
+                    muted(),
                     false,
                     dpi,
                 );
@@ -824,8 +923,8 @@ Your originals stay right where they are.",
                 rounded(
                     dc,
                     rect(x - 2, y - 2, w + 4, h + 4),
-                    rgb(255, 255, 255),
-                    rgb(205, 214, 228),
+                    color(255, 255, 255),
+                    color(205, 214, 228),
                     8,
                 );
             }
@@ -833,8 +932,8 @@ Your originals stay right where they are.",
                 rounded(
                     dc,
                     rect(220, 686, 760, 64),
-                    rgb(255, 255, 255),
-                    rgb(228, 233, 241),
+                    color(255, 255, 255),
+                    color(228, 233, 241),
                     12,
                 );
             }

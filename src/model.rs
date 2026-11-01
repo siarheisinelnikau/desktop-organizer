@@ -99,6 +99,8 @@ pub struct Group {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    pub language: crate::i18n::Language,
+    pub theme: crate::i18n::Theme,
     pub root: PathBuf,
     pub startup_update_check: bool,
     pub hide_on_fullscreen: bool,
@@ -111,6 +113,8 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            language: crate::i18n::Language::English,
+            theme: crate::i18n::Theme::Light,
             root: PathBuf::new(),
             startup_update_check: true,
             hide_on_fullscreen: true,
