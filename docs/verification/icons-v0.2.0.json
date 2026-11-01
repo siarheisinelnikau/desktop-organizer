@@ -1,0 +1,221 @@
+{
+  "executable": "E:\\work\\github\\desktop-organizer\\dist\\DesktopOrganizer-v0.2.0.exe",
+  "sha256": "7ff76d939e38530c4e485cca57aae1d2d91390a6b8c5ea1cb10691082a97260a",
+  "resource_sizes": [
+    [
+      16,
+      16
+    ],
+    [
+      20,
+      20
+    ],
+    [
+      24,
+      24
+    ],
+    [
+      32,
+      32
+    ],
+    [
+      48,
+      48
+    ],
+    [
+      64,
+      64
+    ],
+    [
+      128,
+      128
+    ],
+    [
+      256,
+      256
+    ]
+  ],
+  "renders": [
+    {
+      "size": 16,
+      "background": [
+        250,
+        250,
+        250
+      ],
+      "visible_bounds": [
+        0,
+        0,
+        16,
+        16
+      ],
+      "changed_pixels": 256
+    },
+    {
+      "size": 16,
+      "background": [
+        28,
+        31,
+        38
+      ],
+      "visible_bounds": [
+        0,
+        0,
+        16,
+        16
+      ],
+      "changed_pixels": 256
+    },
+    {
+      "size": 20,
+      "background": [
+        250,
+        250,
+        250
+      ],
+      "visible_bounds": [
+        0,
+        0,
+        20,
+        20
+      ],
+      "changed_pixels": 400
+    },
+    {
+      "size": 20,
+      "background": [
+        28,
+        31,
+        38
+      ],
+      "visible_bounds": [
+        0,
+        0,
+        20,
+        20
+      ],
+      "changed_pixels": 400
+    },
+    {
+      "size": 24,
+      "background": [
+        250,
+        250,
+        250
+      ],
+      "visible_bounds": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "changed_pixels": 576
+    },
+    {
+      "size": 24,
+      "background": [
+        28,
+        31,
+        38
+      ],
+      "visible_bounds": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "changed_pixels": 576
+    },
+    {
+      "size": 32,
+      "background": [
+        250,
+        250,
+        250
+      ],
+      "visible_bounds": [
+        0,
+        0,
+        32,
+        32
+      ],
+      "changed_pixels": 1024
+    },
+    {
+      "size": 32,
+      "background": [
+        28,
+        31,
+        38
+      ],
+      "visible_bounds": [
+        0,
+        0,
+        32,
+        32
+      ],
+      "changed_pixels": 1024
+    },
+    {
+      "size": 48,
+      "background": [
+        250,
+        250,
+        250
+      ],
+      "visible_bounds": [
+        0,
+        0,
+        48,
+        48
+      ],
+      "changed_pixels": 2304
+    },
+    {
+      "size": 48,
+      "background": [
+        28,
+        31,
+        38
+      ],
+      "visible_bounds": [
+        0,
+        0,
+        48,
+        48
+      ],
+      "changed_pixels": 2304
+    },
+    {
+      "size": 64,
+      "background": [
+        250,
+        250,
+        250
+      ],
+      "visible_bounds": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "changed_pixels": 4096
+    },
+    {
+      "size": 64,
+      "background": [
+        28,
+        31,
+        38
+      ],
+      "visible_bounds": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "changed_pixels": 4096
+    }
+  ],
+  "scope": "LoadLibraryEx resource-only + LoadImageW + DrawIconEx, no process launch or OS tray screenshot"
+}

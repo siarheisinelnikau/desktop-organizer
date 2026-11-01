@@ -2,7 +2,7 @@
 
 Organize the files and shortcuts already on your Windows Desktop into reviewed folders. Optional floating groups and AI suggestions are also available. This independent, MIT-licensed application uses native Win32 controls and GDI; it has no connection to Stardock, uses no competitor artwork and requires no WebView, service, model download or AI subscription.
 
-**Status: local implementation, v0.1.2.** Windows x64 compilation, 25 tests including synthetic HTTP exchanges, real component captures, and bounded native import/settings/navigation/visibility diagnostics are verified. Physical tray clicks, drag-and-drop and broader hardware behavior still need interactive validation. The planned [GitHub repository](https://github.com/siarheisinelnikau/desktop-organizer) and releases have not been published in this work session.
+**Version 0.2.0 · Windows 10/11 x64.** The interface is available in English, Russian, French, German, Spanish and Italian, with persistent light and dark themes. Automated verification and bounded native diagnostics are described below. Physical tray clicks, drag-and-drop and broader hardware behavior still need interactive validation.
 
 ## What it does
 
@@ -18,7 +18,7 @@ Groups are ordinary **non-topmost tool windows**, independent of Explorer. This 
 
 ## Build and package
 
-Requires an existing Rust 1.95+ MSVC x64 toolchain and Windows SDK/linker; the validated toolchain is Rust 1.96.1. The target is Windows 10/11 x64. Older Windows and other executable architectures are unsupported. Runtime uses standard Windows APIs and a statically linked MSVC runtime; no application DLL bundle is needed.
+Requires an existing Rust 1.95+ MSVC x64 toolchain and Windows SDK/linker; the validated toolchains are Rust 1.96.1 and 1.99.1. The target is Windows 10/11 x64. Older Windows and other executable architectures are unsupported. Runtime uses standard Windows APIs and a statically linked MSVC runtime; no application DLL bundle is needed.
 
 ```powershell
 cd E:\work\github\desktop-organizer
@@ -27,12 +27,12 @@ cargo fetch --locked
 ./scripts/check.ps1
 ./scripts/package.ps1
 # Optional static inspection with Python 3 (never loads/executes the EXE):
-python scripts/inspect_binary.py dist/DesktopOrganizer-v0.1.2.exe
+python scripts/inspect_binary.py dist/DesktopOrganizer-v0.2.0.exe
 ```
 
 The shared updater workspace must be present at `../rust-auto-updator`; its core crate is a local path dependency, not a published package. CI runners must provision that sibling workspace before Cargo resolution. Standalone repository checkout is insufficient until the shared workspace is published or separately supplied.
 
-Cargo uses at most two jobs and this repository's `target/`. Verification and packaging use `--offline` and never launch the GUI, updater helper, or any item. HTTP integration tests use a bounded server on `127.0.0.1` with synthetic tokens; no real AI provider is contacted. The output is `dist/DesktopOrganizer-v0.1.2.exe`, with `LICENSE`, `SHA256SUMS` and third-party license texts. This is one executable architecture, so its asset name has no architecture suffix. The binary is currently unsigned; no release or signing certificate is implied.
+Cargo uses at most two jobs and this repository's `target/`. Verification and packaging use `--offline` and never launch the GUI, updater helper, or any item. HTTP integration tests use a bounded server on `127.0.0.1` with synthetic tokens; no real AI provider is contacted. The output is `dist/DesktopOrganizer-v0.2.0.exe`, with `LICENSE`, `SHA256SUMS` and third-party license texts. This is one executable architecture, so its asset name has no architecture suffix. The binary is currently unsigned; no release or signing certificate is implied.
 
 ## Use
 
@@ -41,7 +41,8 @@ Cargo uses at most two jobs and this repository's `target/`. Verification and pa
 3. Review the proposed folder names. Rename a folder or reassign selected files if needed. **Suggest folders** rebuilds the offline proposal; **Ask my AI** is optional and requires explicit metadata consent. The current-source list excludes existing directories and references from other folders. A fresh scan excludes stale references without deleting them from the library.
 4. Choose **Review file moves** to open the full original-path/destination list. **Move N files** asks for final confirmation before creating folders and moving originals inside the same Desktop/source root. **Undo moves** reverses verified completed moves when paths/content still permit it.
 5. For floating tiles instead of real folders, use **Use visual groups only**. In **My groups**, manage groups or assign references. Drag onto a tile to insert before it, or onto empty space to append, within or between groups; context-menu commands and **Alt+Up / Alt+Down** also reorder a selected tile. The order is saved. **Show groups / Hide groups** in My groups/Settings toggles the windows; the tray has explicit show/hide actions. Floating groups start hidden and appear when requested. Closing a group folds it rather than deleting files.
-6. In **Settings**, adjust the opacity slider (60–100%), accent or update preferences and choose **Save settings**. **AI settings** reveals the optional provider fields; **Save & test AI** verifies the configured model. Use **Quit** to exit; the last layout write completes before normal exit.
+6. In **Settings**, choose **Language** and **Theme** at the top. Language names appear as English, Русский, Français, Deutsch, Español and Italiano. Both preferences apply immediately, save automatically and survive restarting; existing layouts keep English and Light until changed. File names, paths, existing group names and AI responses remain unchanged. Technical diagnostic details and Windows-owned dialog buttons follow their original/system language.
+7. In **Settings**, adjust the opacity slider (60–100%), accent or update preferences and choose **Save settings**. **AI settings** reveals the optional provider fields; **Save & test AI** verifies the configured model. Use **Quit** to exit; the last layout write completes before normal exit.
 
 Settings and references live in `%LOCALAPPDATA%\DesktopOrganizer\layout.json`; the current filesystem journal is `operation.json`. Layout writes use a flushed temporary file and atomic replacement. A malformed/future layout is preserved and startup reports an error instead of replacing it. An existing operation journal is reconciled in the file worker on startup so references follow verified completed moves; ambiguous states are reported for manual attention. Back up this directory while the app is closed if you need layout history. The first version has a single active layout, not multiple named layout profiles.
 
@@ -84,7 +85,7 @@ Journal entries are flushed before and after each rename. An interrupted operati
 
 **Check updates** uses the public stable release API for the canonical repository without GitHub login. **Check for updates on startup** is enabled by default; save this toggle to disable startup requests. Startup checks do not block launch, show intrusive failure/no-update dialogs, download or install automatically. Available updates remain visible in Settings. Missing/unpublished releases, rate limits and connectivity errors are reported as unavailable/error, not as up-to-date.
 
-GitHub 404 is shown as **Public releases are unavailable**, with an explanation that the repository may be private or have no published release. This does not mean the installed version was confirmed current. On 2026-11-01 the connected GitHub plugin returned 404 for both the configured repository and its latest-release endpoint. No repository or release was created to hide that condition.
+GitHub 404 is shown as **Public releases are unavailable**, with an explanation that the repository may be private or have no published release. This does not mean the installed version was confirmed current.
 
 **Download & install** uses the shared `rust-auto-updator` core with this product's canonical repository/version/asset configuration. A release must include `DesktopOrganizer-vVERSION.exe` and `SHA256SUMS` for that exact asset. The core bounds the transfer, verifies SHA-256 and the x64 PE structure, stages beside the installed executable, and reports progress. Any GitHub-provided digest must agree with the checksum file. The application saves its layout before handing the verified update to the shared helper, and exits only after handoff succeeds. The helper waits for the original process, verifies its identity and unchanged installed bytes, atomically replaces the EXE with a backup, and restarts it. Settings and user files are never replaced.
 
@@ -92,9 +93,9 @@ Installation needs a writable EXE directory and no administrator rights. The sha
 
 ## Verification and screenshots
 
-See [verification](docs/VERIFICATION.md), [architecture](docs/ARCHITECTURE.md), and the [initial release-note draft](docs/RELEASE_NOTES.md). CI performs noninteractive Windows compilation and fixture tests, then uploads build artifacts; it never publishes a release.
+See [verification](docs/VERIFICATION.md), [architecture](docs/ARCHITECTURE.md), and the [v0.2.0 release notes](docs/RELEASE_NOTES-v0.2.0.md). CI performs noninteractive Windows compilation and fixture tests, then uploads build artifacts. Release publication uses a separate explicitly triggered workflow.
 
-The images below were generated by this executable from its production GDI renderer and native Win32 controls, using seven synthetic files (including a shortcut) and one existing directory. They show client areas at 100% scale. They are not desktop photographs and do not certify OS-native tray menus or input behavior.
+The images below were generated by this executable from its production GDI renderer and native Win32 controls, using seven synthetic files (including a shortcut) and one existing directory. They show client areas at 100% scale, with an 820-pixel-high Settings client area and 760 pixels for the main workspace. They are not desktop photographs and do not certify OS-native tray menus or input behavior.
 
 ![Desktop group with three document references](docs/screenshots/group.png)
 
@@ -107,6 +108,14 @@ The images below were generated by this executable from its production GDI rende
 ![Full original-path and destination review before confirming file moves](docs/screenshots/moves.png)
 
 ![Settings with opacity slider, optional AI connection and updates](docs/screenshots/settings.png)
+
+The following real component captures show the same settings in Russian with Dark appearance and German with Light appearance. The native selectors display the saved choices.
+
+![Russian settings with dark appearance and persistent language and theme selectors](docs/screenshots/settings-dark-ru.png)
+
+![German settings with light appearance](docs/screenshots/settings-de.png)
+
+![Russian organization preview with dark appearance](docs/screenshots/organize-dark-ru.png)
 
 ![AI settings with a synthetic HTTP address, brief transport warning and unavailable public release state](docs/screenshots/settings-ai.png)
 
@@ -124,6 +133,8 @@ Developer-only examples (use absolute output and fixture paths):
 ./target/release/DesktopOrganizer.exe --diagnose E:/work/github/desktop-organizer/.local/runtime.json --fixture-root E:/work/github/desktop-organizer/.local/SampleDesktop
 ```
 
+Capture also accepts `--language en|ru|fr|de|es|it` and `--theme light|dark`; each capture records these selections in its metadata. Settings captures use an 820-pixel-high client area to include the new appearance controls.
+
 Capture supports `library`, `organize`, `moves`, `settings`, `group`, scenarios `populated`, `empty`, `error`, `long-names`, `ai-setup`, `http-server`, `ai-connected`, `no-preview`, and scale 100/125/150. The HTTP/connected scenarios select synthetic UI states. Diagnostic mode verifies settings, current-folder scan/proposal/review without moving files, connection indication, four show/hide transitions, 30 page transitions and ten unchanged exposures. It samples visible/hidden/restore/follow-up states, separates rasters from cached blits and UI CPU from process CPU, records message types, removes its tray icon and exits. Apply an external timeout (15 seconds for capture, 48 for diagnosis). Physical input, dragging, perceived flicker and compositor latency need separate checks; see the verification record for accessibility-traffic measurements.
 
 
@@ -131,4 +142,4 @@ The Windows executable and native small tray handle now share embedded multi-siz
 
 ![Embedded application and small tray icon resource proof](docs/screenshots/embedded-icons.png)
 
-The [verification record](docs/VERIFICATION.md) includes the v0.1.2 workflow checks and measured idle/hidden counters. [Icon resource metadata](docs/verification/icons-v0.1.2.json) identifies the current package; shell interaction limits remain separate from this resource proof.
+The [v0.2.0 verification record](docs/VERIFICATION-v0.2.0.md) documents the current checks. The [earlier verification record](docs/VERIFICATION.md) and icon metadata retain their original version labels; shell interaction limits remain separate from resource proofs.

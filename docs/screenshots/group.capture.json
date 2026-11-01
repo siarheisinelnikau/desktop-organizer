@@ -1,10 +1,17 @@
 {
   "backend": "CPU GDI / native controls",
   "dpi": 96,
-  "elapsed_ms": 3,
+  "elapsed_ms": 6,
   "group_rasters": 1,
+  "language": "english",
   "layouts": 1,
   "main_rasters": 0,
+  "native_selectors": {
+    "language_choices": 6,
+    "selected_language": 0,
+    "selected_theme": 0,
+    "theme_choices": 2
+  },
   "network_requests": 0,
   "pixels": [
     360,
@@ -12,5 +19,7 @@
   ],
   "scenario": "populated",
   "scope": "client area, production Win32 controls and shared GDI renderer",
-  "screen": "group"
+  "screen": "group",
+  "theme": "light",
+  "version": "0.2.0"
 }
