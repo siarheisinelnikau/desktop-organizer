@@ -58,6 +58,7 @@ const SCAN_DESKTOP: u16 = 194;
 const BACK_TO_PLAN: u16 = 195;
 const LANGUAGE: u16 = 196;
 const THEME: u16 = 197;
+const UPDATES_HEADING: u16 = 198;
 // TBM_GETPOS is WM_USER + 0; the pinned metadata omits this alias.
 const TBM_GETPOS: u32 = WM_USER;
 
@@ -228,6 +229,13 @@ fn window_dpi(hwnd: HWND) -> u32 {
 
 fn wide(s: impl AsRef<OsStr>) -> Vec<u16> {
     s.as_ref().encode_wide().chain(Some(0)).collect()
+}
+fn localized_offline(items: &[Item]) -> Vec<grouping::Suggestion> {
+    let mut groups = grouping::offline(items);
+    for group in &mut groups {
+        group.name = tr(&group.name).to_owned();
+    }
+    groups
 }
 fn word(v: usize) -> u16 {
     (v & 0xffff) as u16
@@ -441,10 +449,10 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
                 SendMessageW(app.c(AI_ITEMS), LB_SETSEL, 1, -1);
             }
             if !app.scope.is_empty() && options.scenario != "no-preview" {
-                app.set_suggestions(grouping::offline(&app.scope))?;
+                app.set_suggestions(localized_offline(&app.scope))?;
             }
             if options.screen == "moves" {
-                let groups = grouping::offline(&app.scope);
+                let groups = localized_offline(&app.scope);
                 app.show_move_preview(crate::operations::preview(
                     &app.layout.settings.root,
                     &app.scope,
@@ -607,8 +615,11 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
     }
     if msg == WM_MEASUREITEM {
         let item = &mut *(lp as *mut MEASUREITEMSTRUCT);
-        if item.CtlType == ODT_LISTBOX {
-            item.itemHeight = scale(48, window_dpi(hwnd)) as _;
+        if matches!(item.CtlType, ODT_LISTBOX | ODT_COMBOBOX) {
+            item.itemHeight = scale(
+                if item.CtlType == ODT_LISTBOX { 48 } else { 26 },
+                window_dpi(hwnd),
+            ) as _;
             return 1;
         }
     }
@@ -1052,28 +1063,55 @@ impl App {
             }
         }
         self.sync_theme_choices();
+        self.set(UPDATES_HEADING, &trf!("Updates · v{}", updates::INSTALLED));
         self.sync_folder_name();
         self.sync_ai_transport_note();
         self.apply_native_theme();
         self.main_surface = None;
         self.refresh();
+        if let Ok(groups) = ai::parse_content(&self.text(JSON), &self.scope) {
+            let _ = self.set_suggestions(groups);
+        }
+        match self.ai_connection {
+            AiConnection::NotTested => {
+                self.set_ai_connection(AiConnection::NotTested, "AI not tested")
+            }
+            AiConnection::Checking => {
+                self.set_ai_connection(AiConnection::Checking, "Checking AI…")
+            }
+            AiConnection::Connected => self.set_ai_connection(
+                AiConnection::Connected,
+                &trf!("Connected · {}", self.layout.settings.ai_model),
+            ),
+            AiConnection::Failed => self.set_ai_connection(
+                AiConnection::Failed,
+                "AI connection failed · check settings",
+            ),
+        }
+        if let Some(update) = &self.available {
+            self.set_update(&trf!("Version {} is available. Download and install will close and restart this application.", update.version));
+        }
+        if let Some(plan) = &self.plan {
+            self.set(APPLY_MOVES, &trf!("Move {} files", plan.moves.len()));
+        }
         self.invalidate_groups();
-        self.changed();
+        // Appearance changes preserve an already reviewed filesystem plan.
+        self.dirty = true;
+        SetTimer(self.hwnd, SAVE_TIMER, 450, None);
         self.status("Saving settings…");
         InvalidateRect(self.hwnd, null(), 0);
     }
     unsafe fn create_controls(&mut self) {
-        self.button(PAGE_LIBRARY, 0, "Library", (20, 18, 160, 34));
-        self.button(PAGE_AI, 0, "Organize / AI", (190, 18, 180, 34));
-        self.button(PAGE_SETTINGS, 0, "Settings / Updates", (380, 18, 200, 34));
+        self.button(PAGE_LIBRARY, 0, "My groups", (20, 18, 160, 34));
+        self.button(PAGE_AI, 0, "Organize", (190, 18, 180, 34));
+        self.button(PAGE_SETTINGS, 0, "Settings", (380, 18, 200, 34));
         self.button(SHOW_GROUPS, 0, "Show groups", (790, 18, 180, 34));
-        self.label(1, "Source folder", (20, 78, 105, 25));
+
         let root = self.layout.settings.root.to_string_lossy().into_owned();
         self.edit(ROOT, 1, &root, (130, 72, 615, 30), 0);
-        self.button(BROWSE, 1, "Browse...", (755, 72, 100, 30));
-        self.button(SCAN, 1, "Import", (865, 72, 105, 30));
-        self.label(1,"Import adds references only. Drag files onto any group; original Desktop icons remain unchanged.",(20,112,950,30));
-        self.label(1, "GROUPS", (20, 150, 240, 24));
+        self.button(BROWSE, 1, "Add a folder", (755, 72, 100, 30));
+        self.button(SCAN, 1, "Refresh", (865, 72, 105, 30));
+
         self.control(
             GROUPS,
             1,
@@ -1082,7 +1120,7 @@ impl App {
             LBS_NOTIFY as u32 | WS_VSCROLL,
             (20, 180, 240, 280),
         );
-        self.label(1, "ITEMS — Ctrl/Shift to select", (290, 150, 680, 24));
+
         self.control(
             ITEMS,
             1,
@@ -1094,11 +1132,10 @@ impl App {
         self.edit(GROUP_NAME, 1, "Inbox", (20, 475, 240, 30), 0);
         self.button(RENAME_GROUP, 1, "Rename", (20, 515, 110, 32));
         self.button(NEW_GROUP, 1, "New group", (140, 515, 120, 32));
-        self.button(DELETE_GROUP, 1, "Remove group", (20, 560, 240, 32));
-        self.button(ASSIGN, 1, "Assign selected to group", (290, 475, 240, 32));
-        self.button(REMOVE, 1, "Remove references", (545, 475, 200, 32));
-        self.label(1,"All imported items appear in the list. Assign them to the group selected on the left.\r\nDouble-click a tile to open it. Drag tiles between groups. Use the mouse wheel to scroll.\r\nDouble-click a group title to collapse / expand. Right-click a group for its menu.\r\nRemoving a reference never deletes the original file.",(290,530,680,100));
-        self.label(2,"Select the exact metadata to organize. AI sends name, extension, kind, category and local numeric ID only.",(20,78,950,25));
+        self.button(DELETE_GROUP, 1, "Remove", (20, 560, 240, 32));
+        self.button(ASSIGN, 1, "Add to group", (290, 475, 240, 32));
+        self.button(REMOVE, 1, "Remove from list", (545, 475, 200, 32));
+
         self.control(
             AI_ITEMS,
             2,
@@ -1118,37 +1155,48 @@ impl App {
                 | WS_VSCROLL
                 | WS_HSCROLL,
         );
-        self.button(SELECT_ALL, 2, "Select all metadata", (20, 400, 180, 32));
-        self.button(OFFLINE, 2, "Suggest offline", (210, 400, 175, 32));
-        self.button(APPLY_VISUAL, 2, "Apply visual groups", (400, 400, 220, 32));
+        self.button(SELECT_ALL, 2, "Select all", (20, 400, 180, 32));
+        self.button(OFFLINE, 2, "Suggest folders", (210, 400, 175, 32));
+        self.button(
+            APPLY_VISUAL,
+            2,
+            "Use visual groups only",
+            (400, 400, 220, 32),
+        );
         self.check(
             CONSENT,
             2,
-            "I allow sending the selected metadata to my configured AI endpoint.",
+            "Share selected names and file types with my AI",
             (20, 443, 755, 28),
             false,
         );
-        self.button(REQUEST_AI, 2, "Send selected to AI", (780, 440, 190, 32));
+        self.button(REQUEST_AI, 2, "Ask my AI", (780, 440, 190, 32));
         self.check(
             MOVE_OPT,
             2,
-            "Create folders and move files (optional; only direct files in the source folder)",
+            "Move originals into folders — review first",
             (20, 480, 750, 28),
             false,
         );
-        self.button(PREVIEW_MOVES, 2, "Preview moves", (20, 520, 180, 32));
-        self.button(APPLY_MOVES, 2, "Apply previewed moves", (215, 520, 235, 32));
-        self.button(UNDO, 2, "Undo last file operation", (470, 520, 240, 32));
-        self.edit(MOVES,2,"No file operation planned. Edit names and item_ids in the JSON preview, then preview again.",(20,565,950,90),ES_MULTILINE as u32 | ES_READONLY as u32 | WS_VSCROLL | WS_HSCROLL);
-        self.label(3, "APPEARANCE & BEHAVIOR", (20, 82, 440, 24));
+        self.button(PREVIEW_MOVES, 2, "Review file moves", (20, 520, 180, 32));
+        self.button(APPLY_MOVES, 2, "Move files", (215, 520, 235, 32));
+        self.button(UNDO, 2, "Undo moves", (470, 520, 240, 32));
+        self.edit(
+            MOVES,
+            2,
+            tr("No file moves planned. Go back to folders and review a plan."),
+            (20, 565, 950, 90),
+            ES_MULTILINE as u32 | ES_READONLY as u32 | WS_VSCROLL | WS_HSCROLL,
+        );
+
         self.check(
             FULLSCREEN,
             3,
-            "Hide groups while a foreground app covers its entire monitor",
+            "Hide groups while I use a fullscreen app",
             (20, 115, 650, 28),
             self.layout.settings.hide_on_fullscreen,
         );
-        self.label(3, "Opacity (150-255)", (20, 160, 170, 25));
+
         self.edit(
             OPACITY,
             3,
@@ -1157,8 +1205,7 @@ impl App {
             ES_NUMBER as _,
         );
         self.button(ACCENT, 3, "Choose accent...", (320, 155, 200, 30));
-        self.label(3, "OPENAI-COMPATIBLE PROVIDER", (20, 210, 700, 24));
-        self.label(3, "Base URL", (20, 250, 110, 25));
+
         self.edit(
             BASE,
             3,
@@ -1166,7 +1213,7 @@ impl App {
             (140, 245, 830, 30),
             0,
         );
-        self.label(3, "Model", (20, 290, 110, 25));
+
         self.edit(
             MODEL,
             3,
@@ -1174,7 +1221,7 @@ impl App {
             (140, 285, 830, 30),
             0,
         );
-        self.label(3, "New API token", (20, 330, 115, 25));
+
         self.edit(KEY, 3, "", (140, 325, 520, 30), ES_PASSWORD as _);
         self.check(
             CLEAR_KEY,
@@ -1183,16 +1230,9 @@ impl App {
             (680, 325, 290, 30),
             false,
         );
-        self.label(3,"Blank keeps the saved token. Windows DPAPI protects it for your user. ai-hub example: http://localhost:8080/v1 / universal.",(20,365,950,40));
-        self.button(SAVE_SETTINGS, 3, "Save all settings", (20, 415, 200, 34));
-        self.label(
-            3,
-            &format!(
-                "UPDATES — Installed version {} — Windows x64 portable",
-                updates::INSTALLED
-            ),
-            (20, 475, 950, 24),
-        );
+
+        self.button(SAVE_SETTINGS, 3, "Save settings", (20, 415, 200, 34));
+
         self.check(
             AUTO_CHECK,
             3,
@@ -1200,9 +1240,9 @@ impl App {
             (20, 512, 390, 28),
             self.layout.settings.startup_update_check,
         );
-        self.button(CHECK, 3, "Check for updates", (430, 510, 240, 32));
-        self.button(INSTALL, 3, "Download and install", (690, 510, 280, 32));
-        self.label(3,"Canonical repository: github.com/siarheisinelnikau/desktop-organizer (publication pending)",(20,555,950,24));
+        self.button(CHECK, 3, "Check updates", (430, 510, 240, 32));
+        self.button(INSTALL, 3, "Download & install", (690, 510, 280, 32));
+
         self.control(
             UPDATE_STATUS,
             3,
@@ -1212,7 +1252,7 @@ impl App {
             (20, 588, 950, 65),
         );
         self.control(STATUS, 0, w!("STATIC"), "Ready.", 0, (20, 685, 745, 50));
-        self.button(QUIT, 0, "Save and quit", (790, 685, 180, 34));
+        self.button(QUIT, 0, "Quit", (790, 685, 180, 34));
         DragAcceptFiles(self.hwnd, 1);
         self.redesign_controls();
     }
@@ -1278,9 +1318,9 @@ impl App {
         let dpi = window_dpi(self.hwnd);
         let rect = RECT {
             left: scale(220, dpi) - self.main_scroll.x,
-            top: scale(686, dpi) - self.main_scroll.y,
+            top: scale(726, dpi) - self.main_scroll.y,
             right: scale(980, dpi) - self.main_scroll.x,
-            bottom: scale(750, dpi) - self.main_scroll.y,
+            bottom: scale(790, dpi) - self.main_scroll.y,
         };
         InvalidateRect(self.hwnd, &rect, 0);
     }
@@ -1784,8 +1824,8 @@ impl App {
             }
             NEW_GROUP => {
                 self.layout
-                    .add_group("New group")
-                    .context("Maximum of 40 groups reached")?;
+                    .add_group(tr("New group"))
+                    .context(tr("Maximum of 40 groups reached"))?;
                 self.rebuild_groups()?;
                 self.refresh();
                 SendMessageW(
@@ -1878,7 +1918,7 @@ impl App {
                 );
                 self.plan = None;
                 if id == OFFLINE {
-                    let groups = grouping::offline(&self.scope);
+                    let groups = localized_offline(&self.scope);
                     self.set_suggestions(groups)?;
                     self.status("Folder proposal ready. Review names, then choose Review file moves. Originals have not moved.");
                 } else {
@@ -1934,7 +1974,7 @@ impl App {
                     self.text(JSON) == self.plan_json,
                     tr("The plan changed. Review file moves again.")
                 );
-                let plan = self.plan.clone().context("Preview file moves first")?;
+                let plan = self.plan.clone().context(tr("Preview file moves first"))?;
                 let journal = self.data.join("operation.json");
                 if journal.exists() {
                     let old: Plan = persistence::load(&journal)?;
@@ -2178,7 +2218,8 @@ impl App {
             match event {
                 Event::Saved(sequence, result) => match result {
                     Ok(()) => {
-                        if self.quitting.is_none() && self.text(STATUS) == "Saving settings…" {
+                        if self.quitting.is_none() && self.text(STATUS) == tr("Saving settings…")
+                        {
                             self.status("Settings saved.");
                         }
                         if self.quitting == Some(sequence) {
@@ -2475,7 +2516,7 @@ impl App {
                     SendMessageW(self.c(AI_ITEMS), LB_SETSEL, 1, -1);
                     self.scope = self.selected_items(AI_ITEMS);
                     if !self.scope.is_empty() {
-                        let result = self.set_suggestions(grouping::offline(&self.scope));
+                        let result = self.set_suggestions(localized_offline(&self.scope));
                         if let Err(error) = result {
                             self.error(error);
                         } else {
@@ -2573,9 +2614,9 @@ impl App {
         icon.uID = 1;
         icon.uFlags = NIF_INFO;
         let title = wide(trf!("DesktopOrganizer {} is available", update.version));
-        let body = wide(
+        let body = wide(tr(
             "Open Settings / Updates to review, download and install. Nothing is downloaded automatically.",
-        );
+        ));
         let n = title.len().min(icon.szInfoTitle.len() - 1);
         icon.szInfoTitle[..n].copy_from_slice(&title[..n]);
         let n = body.len().min(icon.szInfo.len() - 1);

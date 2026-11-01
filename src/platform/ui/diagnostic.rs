@@ -183,7 +183,44 @@ pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
             http_note && https_note_hidden && settings_persisted && token_field_cleared,
             "Native HTTP settings save regression"
         );
-        let settings_check = serde_json::json!({"http_warning_shown":http_note,"https_warning_hidden":https_note_hidden,"http_url_and_startup_opt_out_persisted":settings_persisted,"synthetic_token_dpapi_roundtrip":settings_persisted,"token_field_cleared":token_field_cleared,"live_provider_requests":0});
+        let mut settings_check = serde_json::json!({"http_warning_shown":http_note,"https_warning_hidden":https_note_hidden,"http_url_and_startup_opt_out_persisted":settings_persisted,"synthetic_token_dpapi_roundtrip":settings_persisted,"token_field_cleared":token_field_cleared,"live_provider_requests":0});
+        let mut preferences_verified = true;
+        for (language, theme) in [
+            (Language::Russian, Theme::Dark),
+            (Language::French, Theme::Light),
+            (Language::German, Theme::Dark),
+            (Language::Spanish, Theme::Light),
+            (Language::Italian, Theme::Dark),
+            (Language::English, Theme::Light),
+        ] {
+            let (language_control, theme_control) = APP.with(|cell| {
+                let borrow = cell.borrow();
+                let app = borrow.as_ref().unwrap();
+                (app.c(LANGUAGE), app.c(THEME))
+            });
+            SendMessageW(language_control, CB_SETCURSEL, language as usize, 0);
+            SendMessageW(theme_control, CB_SETCURSEL, theme as usize, 0);
+            SendMessageW(
+                hwnd,
+                WM_COMMAND,
+                LANGUAGE as usize | ((CBN_SELCHANGE as usize) << 16),
+                0,
+            );
+            preferences_verified &= APP.with(|cell| {
+                let borrow = cell.borrow();
+                let app = borrow.as_ref().unwrap();
+                app.layout.settings.language == language
+                    && app.layout.settings.theme == theme
+                    && app.text(PAGE_SETTINGS) == i18n::translate(language, "Settings")
+                    && i18n::dark() == (theme == Theme::Dark)
+            });
+        }
+        ensure!(
+            preferences_verified,
+            "Native language/theme switching regression"
+        );
+        settings_check["six_languages_and_both_themes_switch_without_restart"] =
+            serde_json::json!(preferences_verified);
         APP.with(|cell| {
             let mut borrow = cell.borrow_mut();
             let app = borrow.as_mut().unwrap();
@@ -250,6 +287,25 @@ pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
                 && GetWindowLongPtrW(app.c(MOVES), GWL_STYLE) as u32 & WS_VISIBLE != 0
         });
         ensure!(file_review, "Desktop folder review regression");
+        let preference_preserves_review = APP.with(|cell| {
+            let mut borrow = cell.borrow_mut();
+            let app = borrow.as_mut().unwrap();
+            let preview = app.plan_json.clone();
+            SendMessageW(app.c(THEME), CB_SETCURSEL, 1, 0);
+            app.change_preferences();
+            let preserved =
+                app.plan.is_some() && app.plan_json == preview && app.text(JSON) == preview;
+            SendMessageW(app.c(THEME), CB_SETCURSEL, 0, 0);
+            app.change_preferences();
+            preserved && app.plan.is_some() && app.plan_json == preview && app.text(JSON) == preview
+        });
+        ensure!(
+            preference_preserves_review,
+            "Theme switch discarded a reviewed move plan"
+        );
+        settings_check["theme_switch_preserves_reviewed_moves"] =
+            serde_json::json!(preference_preserves_review);
+
         SendMessageW(hwnd, WM_COMMAND, BACK_TO_PLAN as usize, 0);
         SendMessageW(hwnd, WM_COMMAND, APPLY_VISUAL as usize, 0);
         let offline_groups = APP.with(|cell| -> Result<usize> {

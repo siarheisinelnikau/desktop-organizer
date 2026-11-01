@@ -1,4 +1,4 @@
-param([string]$OutputDirectory)
+param([string]$OutputDirectory, [switch]$SkipBuild)
 $ErrorActionPreference = 'Stop'
 $repository = Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $repository
@@ -19,17 +19,21 @@ try {
     }
     foreach ($name in $files.Keys) { [IO.File]::WriteAllText((Join-Path $fixture $name), $files[$name]) }
     New-Item -ItemType Directory -Path (Join-Path $fixture 'Existing folder') -Force | Out-Null
-    & cargo build --locked --offline --release --jobs 2
-    if ($LASTEXITCODE -ne 0) { throw 'Capture build failed.' }
+    if (-not $SkipBuild) {
+        & cargo build --locked --offline --release --jobs 2
+        if ($LASTEXITCODE -ne 0) { throw 'Capture build failed.' }
+    }
     $executable = Join-Path $repository 'target/release/DesktopOrganizer.exe'
-    foreach ($name in @('library', 'organize', 'moves', 'settings', 'group', 'settings-ai', 'organize-empty', 'settings-connected')) {
-        $screen = if ($name -in @('settings-ai', 'settings-connected')) { 'settings' } elseif ($name -eq 'organize-empty') { 'organize' } else { $name }
+    foreach ($name in @('library', 'organize', 'moves', 'settings', 'group', 'settings-ai', 'organize-empty', 'settings-connected', 'settings-dark-ru', 'organize-dark-ru', 'settings-de')) {
+        $screen = if ($name -in @('settings-ai', 'settings-connected', 'settings-dark-ru', 'settings-de')) { 'settings' } elseif ($name -in @('organize-empty', 'organize-dark-ru')) { 'organize' } else { $name }
         $output = Join-Path $OutputDirectory "$name.png"
         $started = [DateTime]::UtcNow
         $arguments = @('--capture', ('"' + $output + '"'), '--screen', $screen, '--fixture-root', ('"' + $fixture + '"'))
         if ($name -eq 'settings-ai') { $arguments += @('--scenario', 'http-server') }
         if ($name -eq 'settings-connected') { $arguments += @('--scenario', 'ai-connected') }
         if ($name -eq 'organize-empty') { $arguments += @('--scenario', 'empty') }
+        if ($name.EndsWith('-dark-ru')) { $arguments += @('--language', 'ru', '--theme', 'dark') }
+        if ($name -eq 'settings-de') { $arguments += @('--language', 'de') }
         $process = Start-Process -FilePath $executable -WorkingDirectory $repository -ArgumentList $arguments -WindowStyle Hidden -PassThru
         if (!$process.WaitForExit(15000)) { Stop-Process -Id $process.Id; throw "Capture timed out: $screen" }
         if ($process.ExitCode -ne 0) { throw "Capture failed: $screen (exit $($process.ExitCode))" }

@@ -50,7 +50,7 @@
   ],
   "Show groups": [
     "Показать группы",
-    "Afficher les groupes",
+    "Afficher groupes",
     "Gruppen anzeigen",
     "Mostrar grupos",
     "Mostra gruppi"
@@ -84,7 +84,7 @@
     "Nuovo gruppo"
   ],
   "Rename": [
-    "Переименовать",
+    "Изменить",
     "Renommer",
     "Umbenennen",
     "Renombrar",
@@ -119,11 +119,11 @@
     "Seleziona tutto"
   ],
   "Suggest folders": [
-    "Предложить папки",
-    "Proposer des dossiers",
-    "Ordner vorschlagen",
+    "Предложить",
+    "Proposer dossiers",
+    "Vorschlagen",
     "Sugerir carpetas",
-    "Suggerisci cartelle"
+    "Suggerisci"
   ],
   "Use visual groups only": [
     "Только визуальные группы",
@@ -161,25 +161,25 @@
     "Annulla spostamenti"
   ],
   "Check updates": [
-    "Проверить обновления",
-    "Vérifier les mises à jour",
+    "Проверить",
+    "Vérifier",
     "Updates prüfen",
-    "Buscar actualizaciones",
-    "Controlla aggiornamenti"
+    "Buscar",
+    "Controlla"
   ],
   "Download & install": [
-    "Скачать и установить",
-    "Télécharger et installer",
-    "Laden und installieren",
-    "Descargar e instalar",
-    "Scarica e installa"
+    "Установить",
+    "Installer",
+    "Installieren",
+    "Instalar",
+    "Installa"
   ],
   "Save settings": [
-    "Сохранить настройки",
-    "Enregistrer les paramètres",
-    "Einstellungen speichern",
-    "Guardar ajustes",
-    "Salva impostazioni"
+    "Сохранить",
+    "Enregistrer",
+    "Speichern",
+    "Guardar",
+    "Salva"
   ],
   "Quit": [
     "Выйти",
@@ -315,8 +315,8 @@
     "Impostazioni IA"
   ],
   "Save & test AI": [
-    "Сохранить и проверить ИИ",
-    "Enregistrer et tester l'IA",
+    "Проверить ИИ",
+    "Enregistrer et tester",
     "KI speichern und testen",
     "Guardar y probar IA",
     "Salva e prova IA"
@@ -1265,5 +1265,12 @@
     "Ordner",
     "Carpetas",
     "Cartelle"
+  ],
+  "No file moves planned. Go back to folders and review a plan.": [
+    "Перемещения не запланированы. Вернитесь к папкам и проверьте план.",
+    "Aucun déplacement prévu. Revenez aux dossiers pour vérifier un plan.",
+    "Keine Verschiebungen geplant. Zurück zu den Ordnern und Plan prüfen.",
+    "No hay movimientos previstos. Vuelve a las carpetas y revisa un plan.",
+    "Nessuno spostamento pianificato. Torna alle cartelle e controlla un piano."
   ]
 }
