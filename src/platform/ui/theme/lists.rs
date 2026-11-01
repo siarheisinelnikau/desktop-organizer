@@ -6,7 +6,7 @@ pub(super) unsafe fn draw_list(raw: *const DRAWITEMSTRUCT) -> LRESULT {
         OWNER_DRAWS.fetch_add(1, Ordering::Relaxed);
         let dc = item.hDC;
         let dpi = window_dpi(item.hwndItem);
-        fill(dc, item.rcItem, rgb(255, 255, 255));
+        fill(dc, item.rcItem, color(255, 255, 255));
         if item.itemID == u32::MAX {
             return 1;
         }
@@ -29,7 +29,15 @@ pub(super) unsafe fn draw_list(raw: *const DRAWITEMSTRUCT) -> LRESULT {
                     let count = c.trim_end_matches(')');
                     (
                         n,
-                        format!("{} {}", count, if count == "1" { "item" } else { "items" }),
+                        format!(
+                            "{} {}",
+                            count,
+                            if count == "1" {
+                                tr("item")
+                            } else {
+                                tr("items")
+                            }
+                        ),
                     )
                 })
                 .unwrap_or((&text, String::new()))
@@ -45,12 +53,12 @@ pub(super) unsafe fn draw_list(raw: *const DRAWITEMSTRUCT) -> LRESULT {
             crate::model::category_for(title.rsplit('.').next().unwrap_or(""))
         };
         let glyph = icons::category(kind);
-        let (color, tint) = match kind {
-            "Images" => (rgb(186, 101, 63), rgb(255, 239, 229)),
-            "Data" => (rgb(39, 136, 109), rgb(228, 246, 238)),
-            "Code" => (rgb(121, 92, 184), rgb(240, 233, 255)),
-            "Folders" => (rgb(168, 121, 39), rgb(255, 245, 216)),
-            _ => (rgb(61, 119, 194), rgb(231, 240, 255)),
+        let (icon_color, tint) = match kind {
+            "Images" => (color(186, 101, 63), color(255, 239, 229)),
+            "Data" => (color(39, 136, 109), color(228, 246, 238)),
+            "Code" => (color(121, 92, 184), color(240, 233, 255)),
+            "Folders" => (color(168, 121, 39), color(255, 245, 216)),
+            _ => (color(61, 119, 194), color(231, 240, 255)),
         };
         let mut row = item.rcItem;
         InflateRect(&mut row, -scale(3, dpi), -scale(2, dpi));
@@ -58,8 +66,8 @@ pub(super) unsafe fn draw_list(raw: *const DRAWITEMSTRUCT) -> LRESULT {
             rounded(
                 dc,
                 row,
-                rgb(234, 240, 253),
-                rgb(216, 227, 249),
+                color(234, 240, 253),
+                color(216, 227, 249),
                 scale(8, dpi),
             );
         }
@@ -76,7 +84,7 @@ pub(super) unsafe fn draw_list(raw: *const DRAWITEMSTRUCT) -> LRESULT {
             badge.left + scale(6, dpi),
             badge.top + scale(6, dpi),
             scale(20, dpi),
-            color,
+            icon_color,
         );
         let font = SendMessageW(item.hwndItem, WM_GETFONT, 0, 0);
         let old = SelectObject(dc, font as _);
@@ -91,7 +99,7 @@ pub(super) unsafe fn draw_list(raw: *const DRAWITEMSTRUCT) -> LRESULT {
                 right: row.right - scale(7, dpi),
                 bottom: row.top + scale(23, dpi),
             },
-            INK,
+            ink(),
             DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX,
         );
         let small = CreateFontW(
@@ -120,7 +128,7 @@ pub(super) unsafe fn draw_list(raw: *const DRAWITEMSTRUCT) -> LRESULT {
                 right: row.right - scale(7, dpi),
                 bottom: row.bottom,
             },
-            MUTED,
+            muted(),
             DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX,
         );
         SelectObject(dc, old);

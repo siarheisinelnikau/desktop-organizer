@@ -3,9 +3,10 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 use crate::{
     ai, grouping,
+    i18n::{self, Language, Theme, tr},
     model::{Item, Layout, MAX_ITEMS, Placement},
     operations::{MoveState, Plan},
-    persistence, updates,
+    persistence, trf, updates,
     worker::{Event, Job, Worker},
 };
 use anyhow::{Context, Result, ensure};
@@ -55,6 +56,8 @@ const TIDY_ADD_FOLDER: u16 = 192;
 const AI_TIDY_CONNECTION: u16 = 193;
 const SCAN_DESKTOP: u16 = 194;
 const BACK_TO_PLAN: u16 = 195;
+const LANGUAGE: u16 = 196;
+const THEME: u16 = 197;
 // TBM_GETPOS is WM_USER + 0; the pinned metadata omits this alias.
 const TBM_GETPOS: u32 = WM_USER;
 
@@ -122,6 +125,7 @@ struct Control {
     page: u8,
     rect: (i32, i32, i32, i32),
     placed: Option<(i32, i32, i32, i32)>,
+    caption: RefCell<Option<String>>,
 }
 struct GroupWindow {
     hwnd: HWND,
@@ -266,7 +270,7 @@ pub fn run() {
             MessageBoxW(
                 null_mut(),
                 wide(format!("{error:#}")).as_ptr(),
-                w!("DesktopOrganizer could not start"),
+                wide(tr("DesktopOrganizer could not start")).as_ptr(),
                 MB_OK | MB_ICONERROR,
             );
         }
@@ -315,6 +319,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         Layout::default()
     };
     layout.validate()?;
+    i18n::configure(layout.settings.language, layout.settings.theme);
     let instance = GetModuleHandleW(null());
     let icon = theme::application_icon(instance, false)?;
     let small_icon = theme::application_icon(instance, true)?;
@@ -607,7 +612,10 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
             return 1;
         }
     }
-    if msg == WM_CTLCOLORSTATIC {
+    if matches!(
+        msg,
+        WM_CTLCOLORSTATIC | WM_CTLCOLOREDIT | WM_CTLCOLORLISTBOX | WM_CTLCOLORBTN
+    ) {
         SetBkMode(wp as HDC, TRANSPARENT as _);
         SetTextColor(
             wp as HDC,
@@ -616,23 +624,24 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
                 AI_CONNECTION | AI_TIDY_CONNECTION
             ) {
                 match GetWindowLongPtrW(lp as HWND, GWLP_USERDATA) {
-                    1 => theme::rgb(26, 124, 90),
-                    2 => theme::rgb(153, 89, 28),
-                    _ => theme::rgb(82, 102, 150),
+                    1 => theme::color(26, 124, 90),
+                    2 => theme::color(153, 89, 28),
+                    _ => theme::color(82, 102, 150),
                 }
             } else if GetDlgCtrlID(lp as HWND) == AI_TRANSPORT_NOTE as i32 {
-                theme::rgb(153, 89, 28)
+                theme::color(153, 89, 28)
             } else {
-                theme::rgb(43, 54, 69)
+                theme::color(43, 54, 69)
             },
         );
         if GetDlgCtrlID(lp as HWND) == AI_CONNECTION as i32 {
-            SetBkColor(wp as HDC, theme::rgb(249, 250, 253));
-            SetDCBrushColor(wp as HDC, theme::rgb(249, 250, 253));
+            SetBkColor(wp as HDC, theme::color(249, 250, 253));
+            SetDCBrushColor(wp as HDC, theme::color(249, 250, 253));
             return GetStockObject(DC_BRUSH) as LRESULT;
         }
-        SetBkColor(wp as HDC, theme::rgb(255, 255, 255));
-        return GetStockObject(WHITE_BRUSH) as LRESULT;
+        SetBkColor(wp as HDC, theme::color(255, 255, 255));
+        SetDCBrushColor(wp as HDC, theme::color(255, 255, 255));
+        return GetStockObject(DC_BRUSH) as LRESULT;
     }
     // DestroyWindow sends this synchronously while App is already borrowed.
     // Quit must work without a paint or a second mutable borrow, including when hidden.
@@ -650,6 +659,7 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
         let result = match msg {
             WM_COMMAND => {
                 let id = word(wp); let notification = (wp >> 16) as u16;
+                if matches!(id, LANGUAGE | THEME) && notification == CBN_SELCHANGE as u16 { app.change_preferences(); return Some(0); }
                 if id == GROUPS && notification == LBN_SELCHANGE as u16 { app.group_selection(); return Some(0); }
                 if id == PROPOSALS && notification == LBN_SELCHANGE as u16 { app.proposal_selection(); return Some(0); }
                 if matches!(id,BASE|MODEL|KEY) && notification == EN_CHANGE as u16 { app.ai_edited(); app.sync_ai_transport_note(); return Some(0); }
@@ -672,11 +682,11 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
             START => {
                 app.status("");
                 app.register_tray();
-                if app.layout.settings.startup_update_check && let Err(e) = app.worker.submit(Job::Check) { app.set_update(&format!("Startup update check unavailable: {e}")); }
+                if app.layout.settings.startup_update_check && let Err(e) = app.worker.submit(Job::Check) { app.set_update(&trf!("Startup update check unavailable: {}", e)); }
                 let journal=app.data.join("operation.json");
                 if journal.exists() && let Err(e)=app.worker.submit(Job::Recover(journal)) { app.error(e); }
                 let failure = app.data.join("update-error.txt");
-                if let Ok(message) = fs::read_to_string(&failure) { app.set_update(&format!("Previous update failed: {message}")); let _ = fs::remove_file(failure); }
+                if let Ok(message) = fs::read_to_string(&failure) { app.set_update(&trf!("Previous update failed: {}", message)); let _ = fs::remove_file(failure); }
                 0
             },
             WORK => { app.worker_events(); 0 },
@@ -924,12 +934,12 @@ impl App {
         };
         let is_edit = matches!(
             id,
-            ROOT | GROUP_NAME | JSON | MOVES | BASE | MODEL | KEY | OPACITY
+            ROOT | GROUP_NAME | PROPOSAL_NAME | JSON | MOVES | BASE | MODEL | KEY | OPACITY
         );
         let hwnd = CreateWindowExW(
             if is_edit { WS_EX_CLIENTEDGE } else { 0 },
             class,
-            wide(text).as_ptr(),
+            wide(if is_edit { text } else { tr(text) }).as_ptr(),
             WS_CHILD | if id == 0 { 0 } else { WS_TABSTOP } | style,
             0,
             0,
@@ -946,6 +956,7 @@ impl App {
             page,
             rect,
             placed: None,
+            caption: RefCell::new((!is_edit && i18n::is_message(text)).then(|| text.to_owned())),
         });
         if is_edit {
             SendMessageW(
@@ -998,6 +1009,58 @@ impl App {
             if checked { BST_CHECKED } else { BST_UNCHECKED } as _,
             0,
         );
+    }
+    unsafe fn sync_theme_choices(&self) {
+        SendMessageW(self.c(THEME), CB_RESETCONTENT, 0, 0);
+        for key in ["Light", "Dark"] {
+            SendMessageW(self.c(THEME), CB_ADDSTRING, 0, wide(tr(key)).as_ptr() as _);
+        }
+        SendMessageW(
+            self.c(THEME),
+            CB_SETCURSEL,
+            self.layout.settings.theme as usize,
+            0,
+        );
+    }
+    unsafe fn apply_native_theme(&self) {
+        for control in &self.controls {
+            SetWindowTheme(
+                control.hwnd,
+                if i18n::dark() {
+                    w!("DarkMode_Explorer")
+                } else {
+                    w!("Explorer")
+                },
+                null(),
+            );
+            InvalidateRect(control.hwnd, null(), 1);
+        }
+    }
+    unsafe fn change_preferences(&mut self) {
+        self.layout.settings.language = Language::from_index(
+            SendMessageW(self.c(LANGUAGE), CB_GETCURSEL, 0, 0).max(0) as usize,
+        );
+        self.layout.settings.theme = if SendMessageW(self.c(THEME), CB_GETCURSEL, 0, 0) == 1 {
+            Theme::Dark
+        } else {
+            Theme::Light
+        };
+        i18n::configure(self.layout.settings.language, self.layout.settings.theme);
+        for control in &self.controls {
+            if let Some(key) = control.caption.borrow().as_ref() {
+                SetWindowTextW(control.hwnd, wide(tr(key)).as_ptr());
+            }
+        }
+        self.sync_theme_choices();
+        self.sync_folder_name();
+        self.sync_ai_transport_note();
+        self.apply_native_theme();
+        self.main_surface = None;
+        self.refresh();
+        self.invalidate_groups();
+        self.changed();
+        self.status("Saving settings…");
+        InvalidateRect(self.hwnd, null(), 0);
     }
     unsafe fn create_controls(&mut self) {
         self.button(PAGE_LIBRARY, 0, "Library", (20, 18, 160, 34));
@@ -1168,6 +1231,23 @@ impl App {
         String::from_utf16_lossy(&buf[..n as usize])
     }
     unsafe fn set(&self, id: u16, text: &str) {
+        // Only known interface captions are translated. Editable names, paths and data stay intact.
+        let interface = !matches!(
+            id,
+            ROOT | GROUP_NAME
+                | PROPOSAL_NAME
+                | JSON
+                | MOVES
+                | BASE
+                | MODEL
+                | KEY
+                | OPACITY
+                | FOLDER_NAME
+        );
+        if interface && let Some(control) = self.controls.iter().find(|c| c.id == id) {
+            *control.caption.borrow_mut() = i18n::is_message(text).then(|| text.to_owned());
+        }
+        let text = if interface { tr(text) } else { text };
         let text = text.replace("\r\n", "\n").replace('\n', "\r\n");
         SetWindowTextW(self.c(id), wide(text).as_ptr());
         if id == ROOT {
@@ -1181,7 +1261,7 @@ impl App {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| {
                 if path.as_os_str().is_empty() {
-                    "Choose your first folder".into()
+                    tr("Choose your first folder").into()
                 } else {
                     path.to_string_lossy().into_owned()
                 }
@@ -1240,7 +1320,7 @@ impl App {
             || self.checked(CLEAR_KEY)
     }
     unsafe fn error(&self, error: anyhow::Error) {
-        self.status(&format!("Error: {error:#}"));
+        self.status(&trf!("Error: {}", format!("{error:#}")));
     }
     unsafe fn set_update(&self, text: &str) {
         self.set(UPDATE_STATUS, text);
@@ -1252,9 +1332,9 @@ impl App {
         GetClientRect(self.hwnd, &mut client);
         if let Some(button) = self.controls.iter_mut().find(|c| c.id == AI_SETUP) {
             button.rect = if self.ai_setup_open {
-                (772, 250, 188, 34)
+                (772, 290, 188, 34)
             } else {
-                (772, 326, 188, 38)
+                (772, 366, 188, 38)
             };
         }
         for (bar, total, page, pos) in [
@@ -1266,7 +1346,7 @@ impl App {
             ),
             (
                 SB_VERT,
-                scale(745, dpi),
+                scale(790, dpi),
                 client.bottom,
                 &mut self.main_scroll.y,
             ),
@@ -1508,7 +1588,7 @@ impl App {
                 let text = if list_id == ITEMS {
                     format!("{}    ·    {}", item.name, group)
                 } else {
-                    format!("{}    ·    {}", item.name, item.category)
+                    format!("{}    ·    {}", item.name, tr(&item.category))
                 };
                 SendMessageW(list, LB_ADDSTRING, 0, wide(text).as_ptr() as _);
             }
@@ -1542,7 +1622,7 @@ impl App {
             if let Some(g) = self.layout.groups.iter().find(|g| g.id == *id) {
                 SetWindowTextW(
                     w.hwnd,
-                    wide(format!("{} — {} items", g.name, g.items.len())).as_ptr(),
+                    wide(trf!("{} — {} items", g.name, g.items.len())).as_ptr(),
                 );
             }
         }
@@ -1626,7 +1706,7 @@ impl App {
             QUIT | TRAY_QUIT => {
                 ensure!(
                     self.task == 0,
-                    "Wait for the current operation before quitting"
+                    tr("Wait for the current operation before quitting")
                 );
                 KillTimer(self.hwnd, SAVE_TIMER);
                 let sequence = self.flush_save()?;
@@ -1648,7 +1728,7 @@ impl App {
         }
         ensure!(
             self.task == 0 && self.quitting.is_none(),
-            "Wait for the current background operation"
+            tr("Wait for the current background operation")
         );
         match id {
             ADD_DESKTOP | SCAN_DESKTOP => {
@@ -1656,7 +1736,7 @@ impl App {
                 ensure!(
                     SHGetKnownFolderPath(&FOLDERID_Desktop, 0, null_mut(), &mut path) >= 0
                         && !path.is_null(),
-                    "Windows could not locate your Desktop. Choose a folder instead."
+                    tr("Windows could not locate your Desktop. Choose a folder instead.")
                 );
                 let mut length = 0;
                 while *path.add(length) != 0 {
@@ -1673,7 +1753,10 @@ impl App {
             BROWSE | TIDY_ADD_FOLDER => {
                 let mut info: BROWSEINFOW = zeroed();
                 info.hwndOwner = self.hwnd;
-                info.lpszTitle = w!("Choose the source folder. Importing does not move files.");
+                let browse_title = wide(tr(
+                    "Choose the source folder. Importing does not move files.",
+                ));
+                info.lpszTitle = browse_title.as_ptr();
                 info.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
                 let pidl = SHBrowseForFolderW(&info);
                 if !pidl.is_null() {
@@ -1690,7 +1773,7 @@ impl App {
             }
             SCAN => {
                 let root = PathBuf::from(self.text(ROOT));
-                ensure!(root.is_absolute(), "Choose an absolute source folder");
+                ensure!(root.is_absolute(), tr("Choose an absolute source folder"));
                 self.layout.settings.root = root.clone();
                 self.set(JSON, "");
                 self.scope.clear();
@@ -1720,7 +1803,7 @@ impl App {
                     !name.trim().is_empty()
                         && name.chars().count() <= 60
                         && !name.chars().any(char::is_control),
-                    "Enter a group name of 1-60 characters"
+                    tr("Enter a group name of 1-60 characters")
                 );
                 let id = self.selected_group();
                 if let Some(g) = self.layout.groups.iter_mut().find(|g| g.id == id) {
@@ -1730,7 +1813,7 @@ impl App {
                 self.changed();
             }
             DELETE_GROUP => {
-                ensure!(self.layout.groups.len() > 1, "Keep at least one group");
+                ensure!(self.layout.groups.len() > 1, tr("Keep at least one group"));
                 let id = self.selected_group();
                 let items = self
                     .layout
@@ -1762,7 +1845,7 @@ impl App {
             RENAME_PROPOSAL => {
                 let mut groups = ai::parse_content(&self.text(JSON), &self.scope)?;
                 let row = SendMessageW(self.c(PROPOSALS), LB_GETCURSEL, 0, 0);
-                ensure!(row >= 0, "Select a proposed group first");
+                ensure!(row >= 0, tr("Select a proposed group first"));
                 groups[row as usize].name = self.text(PROPOSAL_NAME);
                 grouping::validate(&groups, &self.scope)?;
                 self.set_suggestions(groups)?;
@@ -1771,11 +1854,11 @@ impl App {
             ASSIGN_PROPOSAL => {
                 let mut groups = ai::parse_content(&self.text(JSON), &self.scope)?;
                 let row = SendMessageW(self.c(PROPOSALS), LB_GETCURSEL, 0, 0);
-                ensure!(row >= 0, "Select a proposed group first");
+                ensure!(row >= 0, tr("Select a proposed group first"));
                 let selected = self.selected_items(AI_ITEMS);
                 ensure!(
                     !selected.is_empty() && selected.iter().all(|i| self.scope.contains(i)),
-                    "Select files included in this preview"
+                    tr("Select files included in this preview")
                 );
                 let ids: Vec<_> = selected.iter().map(|i| i.id).collect();
                 for group in &mut groups {
@@ -1791,7 +1874,7 @@ impl App {
                 self.scope = self.selected_items(AI_ITEMS);
                 ensure!(
                     !self.scope.is_empty(),
-                    "Choose at least one file to organize."
+                    tr("Choose at least one file to organize.")
                 );
                 self.plan = None;
                 if id == OFFLINE {
@@ -1801,15 +1884,17 @@ impl App {
                 } else {
                     ensure!(
                         !self.ai_settings_dirty(),
-                        "Save your AI settings before asking for groups."
+                        tr("Save your AI settings before asking for groups.")
                     );
                     ensure!(
                         self.checked(CONSENT),
-                        "Check the explicit metadata sharing consent first"
+                        tr("Check the explicit metadata sharing consent first")
                     );
                     ensure!(
                         self.scope.len() <= crate::model::MAX_AI_ITEMS,
-                        "AI supports up to 200 files at once. Use Suggest folders for all files or select a smaller batch."
+                        tr(
+                            "AI supports up to 200 files at once. Use Suggest folders for all files or select a smaller batch."
+                        )
                     );
                     self.worker.submit(Job::Ai {
                         base: self.layout.settings.ai_base_url.clone(),
@@ -1847,7 +1932,7 @@ impl App {
             APPLY_MOVES => {
                 ensure!(
                     self.text(JSON) == self.plan_json,
-                    "The plan changed. Review file moves again."
+                    tr("The plan changed. Review file moves again.")
                 );
                 let plan = self.plan.clone().context("Preview file moves first")?;
                 let journal = self.data.join("operation.json");
@@ -1857,10 +1942,12 @@ impl App {
                         old.moves
                             .iter()
                             .all(|m| m.state == MoveState::Undone || m.state == MoveState::Pending),
-                        "Undo or resolve the previous operation before starting another. Its journal is preserved."
+                        tr(
+                            "Undo or resolve the previous operation before starting another. Its journal is preserved."
+                        )
                     );
                 }
-                if MessageBoxW(self.hwnd,wide(format!("Move {} files exactly as shown in the scrollable preview?\nNo existing file will be overwritten. Undo uses the saved operation journal.",plan.moves.len())).as_ptr(),w!("Apply file moves"),MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2)!=IDYES { return Ok(()); }
+                if MessageBoxW(self.hwnd,wide(trf!("Move {} files exactly as shown in the scrollable preview?\nNo existing file will be overwritten. Undo uses the saved operation journal.",plan.moves.len())).as_ptr(),wide(tr("Apply file moves")).as_ptr(),MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2)!=IDYES { return Ok(()); }
                 self.worker.submit(Job::Apply(plan, journal))?;
                 self.task = 4;
                 self.plan = None;
@@ -1895,10 +1982,10 @@ impl App {
                 let model = self.text(MODEL).trim().to_owned();
                 ensure!(
                     !model.trim().is_empty() && model.len() < 256,
-                    "Enter a model name"
+                    tr("Enter a model name")
                 );
                 let percent = SendMessageW(self.c(OPACITY_SLIDER), TBM_GETPOS, 0, 0) as u32;
-                ensure!((60..=100).contains(&percent), "Opacity must be 60–100%");
+                ensure!((60..=100).contains(&percent), tr("Opacity must be 60–100%"));
                 let current_percent = (self.layout.settings.opacity as u32 * 100 + 127) / 255;
                 let opacity = if percent == current_percent {
                     self.layout.settings.opacity
@@ -2136,7 +2223,7 @@ impl App {
                             if !self.ai_settings_dirty() {
                                 self.set_ai_connection(
                                     AiConnection::Connected,
-                                    &format!("Connected · {}", self.layout.settings.ai_model),
+                                    &trf!("Connected · {}", self.layout.settings.ai_model),
                                 );
                             }
                             if let Err(error) = self.set_suggestions(groups) {
@@ -2200,8 +2287,8 @@ impl App {
                     }
                     match result {
                         Ok(updates::CheckStatus::Available(update)) => {
-                            self.set_update(&format!("Version {} is available. Download and install will close and restart this application.",update.version));
-                            self.status(&format!(
+                            self.set_update(&trf!("Version {} is available. Download and install will close and restart this application.",update.version));
+                            self.status(&trf!(
                                 "DesktopOrganizer {} is available in Settings / Updates.",
                                 update.version
                             ));
@@ -2216,7 +2303,7 @@ impl App {
                         }
                         Err(e) => {
                             self.available = None;
-                            self.set_update(&format!("Update check failed: {e:#}"));
+                            self.set_update(&trf!("Update check failed: {}", format!("{e:#}")));
                         }
                         Ok(updates::CheckStatus::PublicReleaseUnavailable) => {
                             self.available = None;
@@ -2225,9 +2312,11 @@ impl App {
                     }
                 }
                 Event::Progress(n, total) => {
-                    self.set_update(&format!(
-                        "Downloading update: {}% ({n} / {total} bytes)",
-                        n * 100 / total.max(1)
+                    self.set_update(&trf!(
+                        "Downloading update: {}% ({} / {} bytes)",
+                        n * 100 / total.max(1),
+                        n,
+                        total
                     ));
                 }
                 Event::Downloaded(result) => {
@@ -2249,7 +2338,7 @@ impl App {
                             }
                         }
                         Err(e) => {
-                            self.set_update(&format!("Update download failed: {e:#}"));
+                            self.set_update(&trf!("Update download failed: {}", format!("{e:#}")));
                         }
                     }
                 }
@@ -2312,7 +2401,7 @@ impl App {
                 .collect::<Vec<_>>()
                 .join("\r\n\r\n"),
         );
-        self.set(APPLY_MOVES, &format!("Move {} files", plan.moves.len()));
+        self.set(APPLY_MOVES, &trf!("Move {} files", plan.moves.len()));
         self.plan = Some(plan);
         self.switch_page(5);
         self.update_actions();
@@ -2327,7 +2416,7 @@ impl App {
             Ok(()) => {
                 self.set_ai_connection(
                     AiConnection::Connected,
-                    &format!("Connected · {}", self.layout.settings.ai_model),
+                    &trf!("Connected · {}", self.layout.settings.ai_model),
                 );
                 self.status(
                     "AI connection verified. Scan your Desktop, then use Ask my AI for folder suggestions.",
@@ -2380,7 +2469,7 @@ impl App {
                 self.update_actions();
                 self.invalidate_groups();
                 self.changed();
-                self.status(&format!("{count} items ready. Originals stay in place."));
+                self.status(&trf!("{} items ready. Originals stay in place.", count));
                 if preserve_groups && self.organize_after_scan {
                     self.organize_after_scan = false;
                     SendMessageW(self.c(AI_ITEMS), LB_SETSEL, 1, -1);
@@ -2390,7 +2479,7 @@ impl App {
                         if let Err(error) = result {
                             self.error(error);
                         } else {
-                            self.status(&format!("Found {} files and shortcuts. Review the proposed folders; originals have not moved.",self.scope.len()));
+                            self.status(&trf!("Found {} files and shortcuts. Review the proposed folders; originals have not moved.",self.scope.len()));
                         }
                     } else {
                         self.status(
@@ -2466,11 +2555,11 @@ impl App {
         icon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
         icon.uCallbackMessage = TRAY;
         icon.hIcon = self.small_icon;
-        let tip = wide("DesktopOrganizer — Click for settings");
+        let tip = wide(tr("DesktopOrganizer — Click for settings"));
         icon.szTip[..tip.len()].copy_from_slice(&tip);
         ensure!(
             Shell_NotifyIconW(if add { NIM_ADD } else { NIM_DELETE }, &icon) != 0,
-            "Windows tray is unavailable; keep the settings window open"
+            tr("Windows tray is unavailable; keep the settings window open")
         );
         Ok(())
     }
@@ -2483,7 +2572,7 @@ impl App {
         icon.hWnd = self.hwnd;
         icon.uID = 1;
         icon.uFlags = NIF_INFO;
-        let title = wide(format!("DesktopOrganizer {} is available", update.version));
+        let title = wide(trf!("DesktopOrganizer {} is available", update.version));
         let body = wide(
             "Open Settings / Updates to review, download and install. Nothing is downloaded automatically.",
         );
@@ -2502,7 +2591,7 @@ impl App {
             (TRAY_HIDE, "Hide groups"),
             (TRAY_QUIT, "Save and quit"),
         ] {
-            AppendMenuW(menu, MF_STRING, id as _, wide(text).as_ptr());
+            AppendMenuW(menu, MF_STRING, id as _, wide(tr(text)).as_ptr());
         }
         let mut point = POINT::default();
         GetCursorPos(&mut point);
@@ -2524,9 +2613,14 @@ impl App {
     }
     unsafe fn group_menu(&mut self, id: u64) {
         let menu = CreatePopupMenu();
-        AppendMenuW(menu, MF_STRING, 1, w!("Collapse / expand"));
-        AppendMenuW(menu, MF_STRING, 2, w!("Open library / settings"));
-        AppendMenuW(menu, MF_STRING, 3, w!("Hide all groups"));
+        AppendMenuW(menu, MF_STRING, 1, wide(tr("Collapse / expand")).as_ptr());
+        AppendMenuW(
+            menu,
+            MF_STRING,
+            2,
+            wide(tr("Open library / settings")).as_ptr(),
+        );
+        AppendMenuW(menu, MF_STRING, 3, wide(tr("Hide all groups")).as_ptr());
         AppendMenuW(menu, MF_SEPARATOR, 0, null());
         let item_flags = MF_STRING
             | if self.windows.get(&id).and_then(|w| w.selected).is_some() && self.task == 0 {
@@ -2534,8 +2628,18 @@ impl App {
             } else {
                 MF_GRAYED
             };
-        AppendMenuW(menu, item_flags, 4, w!("Move selected item up\tAlt+Up"));
-        AppendMenuW(menu, item_flags, 5, w!("Move selected item down\tAlt+Down"));
+        AppendMenuW(
+            menu,
+            item_flags,
+            4,
+            wide(tr("Move selected item up\tAlt+Up")).as_ptr(),
+        );
+        AppendMenuW(
+            menu,
+            item_flags,
+            5,
+            wide(tr("Move selected item down\tAlt+Down")).as_ptr(),
+        );
         let mut point = POINT::default();
         GetCursorPos(&mut point);
         let window = self.windows[&id].hwnd;
@@ -2602,7 +2706,7 @@ impl App {
             let hwnd = CreateWindowExW(
                 WS_EX_TOOLWINDOW | WS_EX_LAYERED,
                 GROUP_CLASS,
-                wide(format!("{} — {} items", group.name, group.items.len())).as_ptr(),
+                wide(trf!("{} — {} items", group.name, group.items.len())).as_ptr(),
                 WS_POPUP | WS_THICKFRAME | WS_CLIPCHILDREN,
                 0,
                 0,
@@ -2736,7 +2840,7 @@ impl App {
         let dc = CreateCompatibleDC(output);
         let bitmap = CreateCompatibleBitmap(output, r.right.max(1), r.bottom.max(1));
         let old_bitmap = SelectObject(dc, bitmap);
-        fill(dc, r, 0x00251d16);
+        fill(dc, r, theme::color(249, 250, 253));
         SetBkMode(dc, TRANSPARENT as _);
         let font = CreateFontW(
             -scale(14, dpi),
@@ -2770,20 +2874,20 @@ impl App {
                 bottom: scale(44, dpi),
             },
             20,
-            theme::rgb(242, 246, 252),
+            theme::color(31, 44, 63),
             true,
             dpi,
         );
         if !group.collapsed {
             draw(
                 dc,
-                &format!(
+                &trf!(
                     "{} {}  ·  Drag to rearrange",
                     group.items.len(),
                     if group.items.len() == 1 {
-                        "file"
+                        tr("file")
                     } else {
-                        "files"
+                        tr("files")
                     }
                 ),
                 RECT {
@@ -2792,21 +2896,21 @@ impl App {
                     right: r.right - scale(12, dpi),
                     bottom: scale(70, dpi),
                 },
-                theme::rgb(154, 172, 195),
+                theme::color(106, 119, 138),
                 DT_SINGLELINE | DT_END_ELLIPSIS,
             );
         }
         if group.items.is_empty() && !group.collapsed {
             draw(
                 dc,
-                "Your files stay where they are.\nDrop files to add visual references.",
+                tr("Your files stay where they are.\nDrop files to add visual references."),
                 RECT {
                     left: scale(20, dpi),
                     top: scale(90, dpi),
                     right: r.right - scale(20, dpi),
                     bottom: r.bottom,
                 },
-                0x00ded7c9,
+                theme::color(106, 119, 138),
                 DT_WORDBREAK,
             );
         }
@@ -2835,11 +2939,11 @@ impl App {
                 dc,
                 tile,
                 if selected == Some(*item_id) {
-                    0x00604c30
+                    theme::color(224, 231, 248)
                 } else {
-                    theme::rgb(34, 46, 62)
+                    theme::color(255, 255, 255)
                 },
-                theme::rgb(45, 60, 79),
+                theme::color(219, 225, 235),
                 scale(10, dpi),
             );
             let paper = RECT {
@@ -2851,8 +2955,8 @@ impl App {
             theme::rounded(
                 dc,
                 paper,
-                theme::rgb(219, 232, 250),
-                theme::rgb(219, 232, 250),
+                theme::color(219, 232, 250),
+                theme::color(219, 232, 250),
                 scale(4, dpi),
             );
             for line in 0..3 {
@@ -2876,7 +2980,7 @@ impl App {
                     right: tile.right - scale(4, dpi),
                     bottom: tile.bottom - scale(3, dpi),
                 },
-                0x00f7f0e8,
+                theme::color(31, 44, 63),
                 DT_CENTER | DT_WORDBREAK | DT_END_ELLIPSIS,
             );
             RestoreDC(dc, -1);
