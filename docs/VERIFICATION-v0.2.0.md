@@ -37,15 +37,15 @@ Source inspection confirms blocking `GetMessage`, event-driven worker completion
 
 The bounded diagnostic ran the packaged optimized executable with synthetic files in an explicit isolated directory. A shared named mutex serialized visible diagnostics with other projects. The test exited successfully and removed its tray icon. [Full native report](verification/runtime-v0.2.0.json) records PID 42860 and the exact executable path.
 
-| Settled state | Sample | One-core CPU | Main/group rasters | Cached main blits |
+| Measured state | Sample | One-core CPU | Main/group rasters | Cached main blits |
 | --- | --- | --- | --- | --- |
 | Visible | 5 seconds | 0.0000% | 0 / 0 | 0 |
-| After navigation | 5 seconds | 2.4999% | 0 / 0 | 2 |
+| After navigation, pointer traffic | 5 seconds | 2.4999% | 0 / 0 | 2 |
 | Hidden | 5 seconds | 0.0000% | 0 / 0 | 0 |
 | Restored | 5 seconds | 0.0000% | 0 / 0 | 0 |
 | Restored follow-up | 5 seconds | 0.0000% | 0 / 0 | 1 |
 
-The follow-up blit corresponds to one OS paint/exposure and reused the cached scene. Ten deliberately invalidated unchanged exposures rebuilt zero scenes. Thirty page transitions created zero fonts, caused zero layouts or unexpected control visibility, and dispatched in at most 10.18 ms in this run; this is native dispatch timing rather than presentation latency.
+The after-navigation sample received 524 queued `WM_MOUSEMOVE` messages and is classified as active pointer traffic, not idle. Its two OS paint events reused the cached scene. The four quiet visible/hidden/restore samples measured 0.0% one-core CPU. The follow-up blit corresponds to one OS paint/exposure and also reused the cached scene. Ten deliberately invalidated unchanged exposures rebuilt zero scenes. Thirty page transitions created zero fonts, caused zero layouts or unexpected control visibility, and dispatched in at most 10.18 ms in this run; this is native dispatch timing rather than presentation latency.
 
 Native checks passed for all six language selections and both themes without restarting, preservation of reviewed moves when switching themes, saving HTTP settings and the startup-check opt-out, synthetic DPAPI token roundtrip, connection-state invalidation, import/proposal/review without moving files, four group show/hide transitions, close-to-tray, restore and cleanup. No live AI request or actual file move was performed by the diagnostic.
 

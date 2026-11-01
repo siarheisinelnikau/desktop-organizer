@@ -73,7 +73,9 @@
       "ui_thread_cpu_seconds": 0.125,
       "ui_thread_one_core_percent": 2.4998721065430294,
       "wm_paint": 2,
-      "wm_printclient": 0
+      "wm_printclient": 0,
+      "observed_input": "524 queued WM_MOUSEMOVE messages during the sample; classify as active pointer traffic, not idle",
+      "idle_sample": false
     },
     {
       "cpu_machine_percent": 0.0,
