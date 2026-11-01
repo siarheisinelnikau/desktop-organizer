@@ -1,3 +1,4 @@
+param([switch]$SkipBuild)
 $ErrorActionPreference = 'Stop'
 $repository = Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $repository
@@ -9,8 +10,10 @@ try {
     $version = $package.version
     [xml]$manifest = Get-Content -LiteralPath 'assets/app.manifest' -Raw
     if ($manifest.assembly.assemblyIdentity.version -ne "$version.0") { throw 'Cargo and application manifest versions differ.' }
-    & cargo build --locked --offline --release --jobs 2
-    if ($LASTEXITCODE -ne 0) { throw 'Release compilation failed.' }
+    if (-not $SkipBuild) {
+        & cargo build --locked --offline --release --jobs 2
+        if ($LASTEXITCODE -ne 0) { throw 'Release compilation failed.' }
+    }
     $binary = Join-Path $repository 'target/release/DesktopOrganizer.exe'
     $reader = [System.IO.BinaryReader]::new([System.IO.File]::OpenRead($binary))
     try {

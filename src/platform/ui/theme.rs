@@ -11,9 +11,61 @@ pub(super) unsafe fn draw_control(item: *const DRAWITEMSTRUCT) -> LRESULT {
         }
         if (*item).CtlType == ODT_LISTBOX {
             lists::draw_list(item)
+        } else if (*item).CtlType == ODT_COMBOBOX {
+            draw_combo(item)
         } else {
             draw_button(item)
         }
+    }
+}
+
+unsafe fn draw_combo(raw: *const DRAWITEMSTRUCT) -> LRESULT {
+    unsafe {
+        let item = &*raw;
+        OWNER_DRAWS.fetch_add(1, Ordering::Relaxed);
+        let dc = item.hDC;
+        let background = if item.itemState & ODS_SELECTED != 0 {
+            color(224, 231, 248)
+        } else {
+            color(255, 255, 255)
+        };
+        fill(dc, item.rcItem, background);
+        let index = if item.itemID == u32::MAX {
+            SendMessageW(item.hwndItem, CB_GETCURSEL, 0, 0)
+        } else {
+            item.itemID as isize
+        };
+        if index < 0 {
+            return 1;
+        }
+        let length = SendMessageW(item.hwndItem, CB_GETLBTEXTLEN, index as usize, 0);
+        if !(0..512).contains(&length) {
+            return 1;
+        }
+        let mut text = vec![0u16; length as usize + 1];
+        SendMessageW(
+            item.hwndItem,
+            CB_GETLBTEXT,
+            index as usize,
+            text.as_mut_ptr() as _,
+        );
+        let old = SelectObject(dc, SendMessageW(item.hwndItem, WM_GETFONT, 0, 0) as _);
+        SetBkMode(dc, TRANSPARENT as _);
+        SetTextColor(dc, ink());
+        let mut rect = item.rcItem;
+        rect.left += scale(8, window_dpi(item.hwndItem));
+        DrawTextW(
+            dc,
+            text.as_ptr(),
+            length as i32,
+            &mut rect,
+            DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX,
+        );
+        if item.itemState & ODS_FOCUS != 0 {
+            DrawFocusRect(dc, &item.rcItem);
+        }
+        SelectObject(dc, old);
+        1
     }
 }
 
@@ -432,7 +484,7 @@ impl App {
                 (240, 514, 520, 24),
             );
             self.label(3, "Look and feel", (240, 116, 600, 26));
-            self.label(3, "Group opacity", (240, 192, 290, 24));
+            self.label(3, "Group opacity", (240, 232, 170, 24));
             self.control(
                 OPACITY_SLIDER,
                 3,
@@ -497,9 +549,12 @@ impl App {
                 "Leave the token blank to keep the saved one.",
                 (240, 428, 720, 24),
             );
-            self.label(
+            self.control(
+                UPDATES_HEADING,
                 3,
+                w!("STATIC"),
                 &trf!("Updates · v{}", updates::INSTALLED),
+                0,
                 (240, 518, 700, 24),
             );
             // Preferences stay visible at the top of Settings and save immediately.
@@ -520,7 +575,10 @@ impl App {
                 3,
                 w!("COMBOBOX"),
                 "",
-                CBS_DROPDOWNLIST as u32 | WS_VSCROLL,
+                CBS_DROPDOWNLIST as u32
+                    | CBS_OWNERDRAWFIXED as u32
+                    | CBS_HASSTRINGS as u32
+                    | WS_VSCROLL,
                 (326, 144, 268, 220),
             );
             for language in Language::ALL {
@@ -543,7 +601,7 @@ impl App {
                 3,
                 w!("COMBOBOX"),
                 "",
-                CBS_DROPDOWNLIST as u32,
+                CBS_DROPDOWNLIST as u32 | CBS_OWNERDRAWFIXED as u32 | CBS_HASSTRINGS as u32,
                 (710, 144, 250, 120),
             );
             self.sync_theme_choices();
@@ -931,7 +989,7 @@ impl App {
             if !self.text(STATUS).is_empty() {
                 rounded(
                     dc,
-                    rect(220, 686, 760, 64),
+                    rect(220, 726, 760, 64),
                     color(255, 255, 255),
                     color(228, 233, 241),
                     12,

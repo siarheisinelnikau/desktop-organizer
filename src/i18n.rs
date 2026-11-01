@@ -12,7 +12,6 @@ use std::{
 #[serde(rename_all = "lowercase")]
 pub enum Language {
     #[default]
-    #[serde(other)]
     English,
     Russian,
     French,
@@ -47,7 +46,6 @@ impl Language {
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
     #[default]
-    #[serde(other)]
     Light,
     Dark,
 }
@@ -83,7 +81,11 @@ pub fn tr(key: &str) -> &str {
     )
 }
 pub fn message(key: &str, values: &[String]) -> String {
-    let template = tr(key);
+    let language = Language::from_index(LANGUAGE.load(Ordering::Relaxed) as usize);
+    render(language, key, values)
+}
+pub fn render(language: Language, key: &str, values: &[String]) -> String {
+    let template = translate(language, key);
     let mut output = String::new();
     let mut rest = template;
     for value in values {
@@ -129,6 +131,20 @@ mod tests {
             );
         }
         assert_eq!(translate(Language::French, "Settings"), "Paramètres");
+    }
+    #[test]
+    fn translated_parameters_preserve_paths_braces_and_counts() {
+        for language in Language::ALL {
+            let text = render(language, "Error: {}", &["C:/Private/{name}.txt".into()]);
+            assert!(text.ends_with("C:/Private/{name}.txt"));
+            let text = render(
+                language,
+                "Downloading update: {}% ({} / {} bytes)",
+                &["25".into(), "1024".into(), "4096".into()],
+            );
+            assert!(text.contains("25") && text.contains("1024") && text.contains("4096"));
+            assert!(!text.contains("{}"));
+        }
     }
     #[test]
     fn old_settings_keep_english_light_and_existing_options() {

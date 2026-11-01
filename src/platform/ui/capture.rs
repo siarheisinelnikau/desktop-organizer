@@ -10,6 +10,8 @@ pub(super) struct Options {
     pub scenario: String,
     pub root: Option<PathBuf>,
     pub dpi: u32,
+    pub language: Language,
+    pub theme: Theme,
 }
 impl Options {
     pub fn parse(args: impl Iterator<Item = OsString>) -> Result<Option<Self>> {
@@ -19,7 +21,7 @@ impl Options {
         }
         if !args.iter().any(|a| a == "--capture" || a == "--diagnose") {
             anyhow::bail!(
-                "Unknown command line. Use --capture ABSOLUTE.png --screen library|organize|settings|group|moves [--fixture-root PATH] [--scenario populated|empty|error|long-names|ai-setup|http-server|ai-connected|no-preview] [--scale 100|125|150]"
+                "Unknown command line. Use --capture ABSOLUTE.png --screen library|organize|settings|group|moves [--fixture-root PATH] [--scenario populated|empty|error|long-names|ai-setup|http-server|ai-connected|no-preview] [--scale 100|125|150] [--language en|ru|fr|de|es|it] [--theme light|dark]"
             );
         }
         let mut result = Self {
@@ -29,6 +31,8 @@ impl Options {
             scenario: "populated".into(),
             root: None,
             dpi: 96,
+            language: Language::English,
+            theme: Theme::Light,
         };
         let mut args = args.into_iter();
         while let Some(flag) = args.next() {
@@ -42,6 +46,24 @@ impl Options {
                 Some("--screen") => result.screen = value.to_string_lossy().into_owned(),
                 Some("--scenario") => result.scenario = value.to_string_lossy().into_owned(),
                 Some("--fixture-root") => result.root = Some(value.into()),
+                Some("--language") => {
+                    result.language = match value.to_str() {
+                        Some("en") => Language::English,
+                        Some("ru") => Language::Russian,
+                        Some("fr") => Language::French,
+                        Some("de") => Language::German,
+                        Some("es") => Language::Spanish,
+                        Some("it") => Language::Italian,
+                        _ => anyhow::bail!("Capture language must be en, ru, fr, de, es or it"),
+                    }
+                }
+                Some("--theme") => {
+                    result.theme = match value.to_str() {
+                        Some("light") => Theme::Light,
+                        Some("dark") => Theme::Dark,
+                        _ => anyhow::bail!("Capture theme must be light or dark"),
+                    }
+                }
                 Some("--scale") => {
                     result.dpi = match value.to_str() {
                         Some("100") => 96,
@@ -97,6 +119,8 @@ impl Options {
         let mut layout = Layout::default();
         // Capture bypasses startup work while showing the production default.
         layout.settings.startup_update_check = true;
+        layout.settings.language = self.language;
+        layout.settings.theme = self.theme;
         layout.settings.opacity = 255;
         if self.scenario == "http-server" {
             layout.settings.ai_base_url = "http://192.0.2.10:8080/v1".into();
@@ -123,7 +147,10 @@ impl Options {
                 "Quarterly planning notes with a deliberately long filename for layout review.md"
                     .into();
         }
-        let groups = grouping::offline(&layout.items);
+        let mut groups = grouping::offline(&layout.items);
+        for group in &mut groups {
+            group.name = i18n::translate(self.language, &group.name).to_owned();
+        }
         grouping::apply(&mut layout, &groups)?;
         layout.validate()?;
         Ok(layout)
@@ -151,7 +178,14 @@ pub(super) unsafe fn save(options: &Options, main: HWND) -> Result<()> {
         let (width, height) = if options.screen == "group" {
             (360, 300)
         } else {
-            (1000, 760)
+            (
+                1000,
+                if options.screen == "settings" {
+                    820
+                } else {
+                    760
+                },
+            )
         };
         let (width, height) = (scale(width, options.dpi), scale(height, options.dpi));
         let mut outer = RECT {
@@ -246,15 +280,37 @@ pub(super) unsafe fn save(options: &Options, main: HWND) -> Result<()> {
                     child,
                     WM_PRINT,
                     dc as usize,
-                    (PRF_CLIENT | PRF_NONCLIENT | PRF_ERASEBKGND) as isize,
+                    (PRF_CLIENT | PRF_NONCLIENT | PRF_ERASEBKGND | PRF_CHILDREN) as isize,
                 );
+                // Hidden native combo boxes omit their owner-drawn selection in WM_PRINT.
+                // Render that actual HWND selection through the production owner-draw path.
+                if matches!(GetDlgCtrlID(child) as u16, LANGUAGE | THEME) {
+                    let mut selection = RECT::default();
+                    GetClientRect(child, &mut selection);
+                    selection.left += 2;
+                    selection.top += 2;
+                    selection.bottom -= 2;
+                    selection.right -= scale(20, options.dpi);
+                    let item = DRAWITEMSTRUCT {
+                        CtlType: ODT_COMBOBOX,
+                        CtlID: GetDlgCtrlID(child) as u32,
+                        itemID: SendMessageW(child, CB_GETCURSEL, 0, 0) as u32,
+                        itemAction: ODA_DRAWENTIRE,
+                        itemState: 0,
+                        hwndItem: child,
+                        hDC: dc,
+                        rcItem: selection,
+                        itemData: 0,
+                    };
+                    theme::draw_control(&item);
+                }
                 RestoreDC(dc, -1);
             }
         }
         GdiFlush();
         let bgra = std::slice::from_raw_parts(pixels as *const u8, (width * height * 4) as usize);
         let mut rgb = Vec::with_capacity((width * height * 3) as usize);
-        for pixel in bgra.chunks_exact(4) {
+        for pixel in bgra.as_chunks::<4>().0 {
             rgb.extend_from_slice(&[pixel[2], pixel[1], pixel[0]]);
         }
         SelectObject(dc, old);
@@ -265,7 +321,11 @@ pub(super) unsafe fn save(options: &Options, main: HWND) -> Result<()> {
             "Capture exceeded its internal rendering deadline"
         );
         write_png(&options.output, width as _, height as _, &rgb)?;
-        let metadata = serde_json::json!({"screen":options.screen,"scenario":options.scenario,"scope":"client area, production Win32 controls and shared GDI renderer","backend":"CPU GDI / native controls","pixels":[width,height],"dpi":options.dpi,"elapsed_ms":started.elapsed().as_millis(),"layouts":LAYOUTS.load(Ordering::Relaxed),"main_rasters":MAIN_PAINTS.load(Ordering::Relaxed),"group_rasters":GROUP_PAINTS.load(Ordering::Relaxed),"network_requests":0});
+        let selectors = APP.with(|cell| {
+            let borrow = cell.borrow(); let app = borrow.as_ref().unwrap();
+            serde_json::json!({"language_choices":SendMessageW(app.c(LANGUAGE), CB_GETCOUNT, 0, 0),"selected_language":SendMessageW(app.c(LANGUAGE), CB_GETCURSEL, 0, 0),"theme_choices":SendMessageW(app.c(THEME), CB_GETCOUNT, 0, 0),"selected_theme":SendMessageW(app.c(THEME), CB_GETCURSEL, 0, 0)})
+        });
+        let metadata = serde_json::json!({"screen":options.screen,"scenario":options.scenario,"scope":"client area, production Win32 controls and shared GDI renderer","backend":"CPU GDI / native controls","version":updates::INSTALLED,"language":options.language,"theme":options.theme,"pixels":[width,height],"dpi":options.dpi,"elapsed_ms":started.elapsed().as_millis(),"layouts":LAYOUTS.load(Ordering::Relaxed),"main_rasters":MAIN_PAINTS.load(Ordering::Relaxed),"group_rasters":GROUP_PAINTS.load(Ordering::Relaxed),"network_requests":0,"native_selectors":selectors});
         fs::write(
             options.output.with_extension("capture.json"),
             serde_json::to_vec_pretty(&metadata)?,
@@ -300,6 +360,22 @@ mod tests {
             vec!["--capture", "relative.png"],
             vec!["--capture", "C:/temp/a.png", "--screen", "typo"],
             vec!["--capture", "C:/temp/a.png", "--scenario", "populated"],
+            vec![
+                "--capture",
+                "C:/temp/a.png",
+                "--scenario",
+                "empty",
+                "--language",
+                "xx",
+            ],
+            vec![
+                "--capture",
+                "C:/temp/a.png",
+                "--scenario",
+                "empty",
+                "--theme",
+                "blue",
+            ],
         ] {
             assert!(Options::parse(args.into_iter().map(OsString::from)).is_err());
         }
