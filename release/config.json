@@ -1,0 +1,14 @@
+{
+  "repository": "siarheisinelnikau/desktop-organizer",
+  "product": "DesktopOrganizer",
+  "kind": "desktop",
+  "assets": [
+    {
+      "name": "DesktopOrganizer-v{version}.exe"
+    }
+  ],
+  "notices": true,
+  "checksum_aliases": [
+    "SHA256SUMS"
+  ]
+}
