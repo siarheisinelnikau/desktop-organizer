@@ -1,0 +1,25 @@
+{
+  "backend": "CPU GDI / native controls",
+  "dpi": 96,
+  "elapsed_ms": 13,
+  "group_rasters": 0,
+  "language": "russian",
+  "layouts": 1,
+  "main_rasters": 0,
+  "native_selectors": {
+    "language_choices": 6,
+    "selected_language": 1,
+    "selected_theme": 1,
+    "theme_choices": 2
+  },
+  "network_requests": 0,
+  "pixels": [
+    940,
+    680
+  ],
+  "scenario": "mixed",
+  "scope": "client area, production Win32 controls and shared GDI renderer",
+  "screen": "arrangement",
+  "theme": "dark",
+  "version": "0.3.0"
+}

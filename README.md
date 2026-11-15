@@ -1,8 +1,8 @@
 # DesktopOrganizer
 
-Organize the files and shortcuts already on your Windows Desktop into reviewed folders. Optional floating groups and AI suggestions are also available. This independent, GPLv3-licensed application uses native Win32 controls and GDI; it has no connection to Stardock, uses no competitor artwork and requires no WebView, service, model download or AI subscription.
+Organize the files and shortcuts already on your Windows Desktop into a mix of reviewed folders and persistent on-screen categories. Optional floating groups and AI suggestions are also available. This independent, GPLv3-licensed application uses native Win32 controls and GDI; it has no connection to Stardock, uses no competitor artwork and requires no WebView, service, model download or AI subscription.
 
-**Version 0.2.0 · Windows 10/11 x64.** The interface is available in English, Russian, French, German, Spanish and Italian, with persistent light and dark themes. Automated verification and bounded native diagnostics are described below. Physical tray clicks, drag-and-drop and broader hardware behavior still need interactive validation.
+**Version 0.3.0 · Windows 10/11 x64.** The interface is available in English, Russian, French, German, Spanish and Italian, with persistent light and dark themes. Automated verification and bounded native diagnostics are described below. Physical tray clicks, drag-and-drop and broader hardware behavior still need interactive validation.
 
 ## What it does
 
@@ -10,7 +10,7 @@ Organize the files and shortcuts already on your Windows Desktop into reviewed f
 - Import references from an explicitly selected folder, or drop files/folders from Explorer onto a group. Drag tiles between groups; double-click or press Enter to open an item. Delete removes a reference only.
 - Tray entry for settings, show/hide groups and explicit save-and-quit; closing settings keeps the app in the tray. A second launch requests activation of the existing instance.
 - Per-monitor DPI awareness, monitor-relative placement, clamping to the available work area after monitor changes, and optional hiding while the foreground window covers its monitor.
-- Deterministic offline grouping by extension, item kind and type category; optional OpenAI-compatible metadata-only suggestions with a plain-language group preview supporting rename and file reassignment.
+- Program-aware offline purpose hints for recognizable application names (Browsers, Development, Design & 3D, Games, Communication and more), with **Needs review** for unknown applications and type categories for other files. Optional OpenAI-compatible suggestions group by purpose/topic and reconsider overly broad proposals once. The plain-language preview supports rename and file reassignment.
 - Optional explicit filesystem organization: every move is previewed, constrained to the chosen source root, fingerprinted, journaled and undoable when original paths remain free and content remains unchanged.
 - Manual and nonblocking startup update checks, a persistent startup opt-out, and user-initiated verified portable update installation with progress, backup, atomic replacement and restart.
 
@@ -27,22 +27,22 @@ cargo fetch --locked
 ./scripts/check.ps1
 ./scripts/package.ps1
 # Optional static inspection with Python 3 (never loads/executes the EXE):
-python scripts/inspect_binary.py dist/DesktopOrganizer-v0.2.0.exe
+python scripts/inspect_binary.py dist/DesktopOrganizer-v0.3.0.exe
 ```
 
 The shared updater workspace must be present at `../rust-auto-updator`; its core crate is a local path dependency, not a published package. CI runners must provision that sibling workspace before Cargo resolution. Standalone repository checkout is insufficient until the shared workspace is published or separately supplied.
 
-Cargo uses at most two jobs and this repository's `target/`. Verification and packaging use `--offline` and never launch the GUI, updater helper, or any item. HTTP integration tests use a bounded server on `127.0.0.1` with synthetic tokens; no real AI provider is contacted. The output is `dist/DesktopOrganizer-v0.2.0.exe`, with `LICENSE`, `SHA256SUMS` and third-party license texts. This is one executable architecture, so its asset name has no architecture suffix. The binary is currently unsigned; no release or signing certificate is implied.
+Cargo uses at most two jobs and this repository's `target/`. Verification and packaging use `--offline` and never launch the GUI, updater helper, or any item. HTTP integration tests use a bounded server on `127.0.0.1` with synthetic tokens; no real AI provider is contacted. The output is `dist/DesktopOrganizer-v0.3.0.exe`, with `LICENSE`, `SHA256SUMS` and third-party license texts. This is one executable architecture, so its asset name has no architecture suffix. The binary is currently unsigned; no release or signing certificate is implied.
 
 ## Use
 
-1. Start the EXE manually in a writable portable folder. No automatic Windows startup entry is installed.
-2. Choose **Scan my Desktop** on the opening **Organize** screen. It reads the files and shortcuts already on your configured user Desktop, including Windows folder redirection, and immediately proposes folders offline. You do not need to add new files or pick every item. Existing directories stay in place; shared Public Desktop shortcuts can be handled separately through **Choose another folder**. Nothing moves during scanning.
-3. Review the proposed folder names. Rename a folder or reassign selected files if needed. **Suggest folders** rebuilds the offline proposal; **Ask my AI** is optional and requires explicit metadata consent. The current-source list excludes existing directories and references from other folders. A fresh scan excludes stale references without deleting them from the library.
-4. Choose **Review file moves** to open the full original-path/destination list. **Move N files** asks for final confirmation before creating folders and moving originals inside the same Desktop/source root. **Undo moves** reverses verified completed moves when paths/content still permit it.
-5. For floating tiles instead of real folders, use **Use visual groups only**. In **My groups**, manage groups or assign references. Drag onto a tile to insert before it, or onto empty space to append, within or between groups; context-menu commands and **Alt+Up / Alt+Down** also reorder a selected tile. The order is saved. **Show groups / Hide groups** in My groups/Settings toggles the windows; the tray has explicit show/hide actions. Floating groups start hidden and appear when requested. Closing a group folds it rather than deleting files.
-6. In **Settings**, choose **Language** and **Theme** at the top. Language names appear as English, Русский, Français, Deutsch, Español and Italiano. Both preferences apply immediately, save automatically and survive restarting; existing layouts keep English and Light until changed. File names, paths, existing group names and AI responses remain unchanged. Technical diagnostic details and Windows-owned dialog buttons follow their original/system language.
-7. In **Settings**, adjust the opacity slider (60–100%), accent or update preferences and choose **Save settings**. **AI settings** reveals the optional provider fields; **Save & test AI** verifies the configured model. Use **Quit** to exit; the last layout write completes before normal exit.
+1. Start the EXE in a writable portable folder and choose **Scan my Desktop**. The file worker inspects the selected folder, saved shortcut targets and available executable descriptions. It never launches a target. Scanning does not move files.
+2. Review **Categories**. Each row shows **Folder** or **On screen**. Select a category and toggle **Keep this category on screen** to choose its destination. Rename categories or reassign selected items as needed; these explicit corrections are saved and respected on future scans and AI requests.
+3. **Ask my AI** requires the session-only **Share names and program details with my AI** consent. It opens **AI conversation** automatically. The main screen and dialog show metadata inspection counts, waiting, received-answer character counts, refinement and validation. The dialog streams the model's public explanation when the provider supports streaming. Enter a follow-up grouping instruction and choose **Send & regroup** to request a new reviewed proposal. Guidance is saved locally for future requests; conversation history is session-only. Nothing moves from a chat message.
+4. Choose **Review organization**. For a mixed plan, the review lists categories kept on screen followed by every original file path and destination for folder categories. **Move N files** still requires final confirmation. Screen categories are excluded from filesystem moves. When every category is on screen, review opens the region editor directly. **All categories on screen** is a shortcut for that choice.
+5. In **Arrange categories on screen**, select a category and monitor, then drag a rectangle across the 8 × 6 grid. For example, place Games in the top center and Development on the left. The minimum region protects readable tiles; item size stays fixed and overflowing items scroll. Arrow keys move a selected region. Regions cannot overlap on the same monitor. **Auto arrange** fills available regions; if space runs out, use another monitor or put some categories into folders. **Save & show groups** persists monitor-relative regions. Reopen the editor through **My groups → Arrange on screen**. Manually moving/resizing a group returns it to free placement.
+6. **Undo moves** reverses verified completed folder moves when paths and content still permit it. It does not move the files belonging to screen categories. Floating panels show references to originals and do not change their targets.
+7. **Settings** contains language, theme, optional AI connection and update preferences. **AI conversation → Forget grouping choices** clears saved corrections and conversational grouping guidance. The normal tray actions show/hide groups and quit; closing settings keeps the app in the tray.
 
 Settings and references live in `%LOCALAPPDATA%\DesktopOrganizer\layout.json`; the current filesystem journal is `operation.json`. Layout writes use a flushed temporary file and atomic replacement. A malformed/future layout is preserved and startup reports an error instead of replacing it. An existing operation journal is reconciled in the file worker on startup so references follow verified completed moves; ambiguous states are reported for manual attention. Back up this directory while the app is closed if you need layout history. The first version has a single active layout, not multiple named layout profiles.
 
@@ -62,16 +62,22 @@ A blank token field keeps the existing saved token; **Remove saved token** clear
 
 HTTP and HTTPS servers are supported, including an HTTP server on another LAN computer. HTTP displays **HTTP is unencrypted. Avoid public Wi-Fi.** under the address; it does not block saving or require another confirmation. Prefer HTTPS when the network cannot be trusted. DPAPI protects the saved token on disk, not an HTTP connection. API URLs must not embed credentials, queries or fragments.
 
-Before each sharing session, select 1–200 items and explicitly enable **Share selected names and file types with my AI**. Only the selected names, extensions, kinds, categories and numeric IDs are sent by an explicit **Ask my AI** click. Filenames can contain private information; paths, file contents, icons and the rest of the imported library are not sent. Redirects are disabled so authorization is not forwarded elsewhere. Metadata consent is not persisted.
+Before each sharing session, explicitly enable **Share names and program details with my AI**. Only selected item IDs, names, extensions, kinds, tentative purpose hints, saved preferred category names, your grouping guidance and an allowlist of program details are sent. Program details are the target filename/extension, product name, file description, company, shortcut description, website host and protocol when available. Full source/target paths, raw command-line arguments, URL paths/credentials/queries, local identity hashes, file contents, icons and unselected records are excluded. Redirects remain disabled. Consent is not persisted.
 
-Responses must be strict JSON with only `groups`, `name` and `item_ids`. Unknown/duplicate IDs, missing items, empty groups, excess groups, extra fields, Markdown and oversized/malformed responses are rejected. Filenames are treated as untrusted data. No model text is executed as a command. A provider failure never silently applies a proposal; offline **Suggest groups** remains available. No live AI endpoint was called during development.
+The model receives purpose-based examples, program evidence and your saved preferences. A large generic or mixed folder gets at most one focused refinement request for affected items. Explicit saved choices are also enforced locally, so a model response cannot silently override them. Responses must be strict JSON with optional `summary` and required `groups`, `name`, `item_ids`; every supplied ID must appear exactly once. No model text executes as a command. Invalid, truncated or repeatedly broad responses preserve the previous preview.
+
+Grouping requests ask for streaming and have a 120-second transport deadline per pass. The dialog shows the public summary as it arrives, then validated folders. Providers that return ordinary JSON instead of a stream remain supported: they show the waiting stage and final explanation. The UI shows actual stages/counts rather than an invented percentage. Hidden dialogs do not refresh their controls; network work remains on a background worker.
+
+Local `.lnk` inspection loads the saved Shell link without calling Resolve or launching the target. Available EXE descriptions come from Windows version resources, read as data on fixed local drives after path checks. Remote, reparse/cloud and unavailable targets are not probed for descriptions; the saved target name or shortcut name remains usable. `.url` inspection reads the stored destination and shares only host/protocol. Raw arguments are hashed locally to distinguish launchers using the same EXE for different games; the arguments themselves are neither saved nor shared. Missing facts remain uncertain rather than fabricated.
+
+Manual proposal renames, file reassignments and cross-group tile moves save per-program preferences in the layout. Target identity allows an ordinary shortcut rename to retain the preference; the source-reference identity is a fallback. This is explicit preference memory, not model fine-tuning. A different target/version path may require another correction. **Forget grouping choices** is available in the conversation dialog.
 
 ## File moves and undo
 
 Scanning and suggestions never move files. The primary Desktop workflow previews actual file moves:
 
 1. Choose **Scan my Desktop**, then review/edit the automatically proposed folders.
-2. Choose **Review file moves**. A separate review screen lists every original path and destination, including collision suffixes. **Back to folders** returns to editing; review again after changing the proposal.
+2. Choose **Review organization**. A separate review screen lists every original path and destination, including collision suffixes. **Back to folders** returns to editing; review again after changing the proposal.
 3. Review all moves and choose **Move N files**, then confirm the count. Changes to sources after preview cause a refusal, rather than moving unknown content.
 4. **Undo moves** loads/reconciles the journal and reverses completed moves, including after a restart. Changed destinations or newly occupied original paths stop undo safely. Resolve such conflicts manually with the journal preserved, then retry.
 
@@ -93,9 +99,23 @@ Installation needs a writable EXE directory and no administrator rights. The sha
 
 ## Verification and screenshots
 
-See [verification](docs/VERIFICATION.md), [architecture](docs/ARCHITECTURE.md), and the [v0.2.0 release notes](docs/RELEASE_NOTES-v0.2.0.md). CI performs noninteractive Windows compilation and fixture tests, then uploads build artifacts. Release publication uses a separate explicitly triggered workflow.
+See [v0.3.0 verification](docs/VERIFICATION-v0.3.0.md), [architecture](docs/ARCHITECTURE.md), and the [v0.3.0 release notes](docs/RELEASE_NOTES-v0.3.0.md). CI performs noninteractive Windows compilation and fixture tests, then uploads build artifacts. Release publication uses a separate explicitly triggered workflow.
 
-The images below were generated by this executable from its production GDI renderer and native Win32 controls, using seven synthetic files (including a shortcut) and one existing directory. They show client areas at 100% scale, with an 820-pixel-high Settings client area and 760 pixels for the main workspace. They are not desktop photographs and do not certify OS-native tray menus or input behavior.
+The new mixed workflow and dialogs below are real client-area renders from the optimized executable, using explicit synthetic fixture state. The conversation image contains a synthetic public response; no live provider was called.
+
+![Mixed folder and on-screen categories in Russian Dark](docs/screenshots/organize-mixed-ru.png)
+
+![Monitor cell editor with Games placed at the top center](docs/screenshots/arrangement-ru.png)
+
+![AI conversation showing the public response and measured receiving stage](docs/screenshots/conversation-ru.png)
+
+The following production-rendered client areas use a separate synthetic application fixture. The proposals are generated offline from names, without calling a model or opening a shortcut.
+
+![Purpose-based folders for recognizable applications, with unknown shortcuts left for review](docs/screenshots/organize-purpose.png)
+
+![Russian purpose-based folder proposal in the dark theme](docs/screenshots/organize-purpose-dark-ru.png)
+
+The images below were generated by this executable from its production GDI renderer and native Win32 controls, using explicit synthetic fixtures. Current main-workspace images use the 16-file purpose fixture; older supplemental images retain their recorded seven-file fixture and version metadata. They show client areas at 100% scale, with an 820-pixel-high Settings client area and 760 pixels for the main workspace. They are not desktop photographs and do not certify OS-native tray menus or input behavior.
 
 ![Desktop group with three document references](docs/screenshots/group.png)
 

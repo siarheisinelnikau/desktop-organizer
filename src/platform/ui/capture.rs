@@ -84,7 +84,16 @@ impl Options {
             "Diagnostic output must be absolute (.png for capture, .json for measurements)"
         );
         ensure!(
-            ["library", "organize", "settings", "group", "moves"].contains(&result.screen.as_str()),
+            [
+                "library",
+                "organize",
+                "settings",
+                "group",
+                "moves",
+                "conversation",
+                "arrangement"
+            ]
+            .contains(&result.screen.as_str()),
             "Unknown capture screen"
         );
         ensure!(
@@ -96,7 +105,8 @@ impl Options {
                 "ai-setup",
                 "http-server",
                 "ai-connected",
-                "no-preview"
+                "no-preview",
+                "mixed"
             ]
             .contains(&result.scenario.as_str()),
             "Unknown capture scenario"
@@ -109,7 +119,7 @@ impl Options {
     }
     pub fn page(&self) -> u8 {
         match self.screen.as_str() {
-            "organize" => 2,
+            "organize" | "conversation" => 2,
             "settings" => 3,
             "moves" => 5,
             _ => 1,
@@ -149,9 +159,67 @@ impl Options {
         }
         let mut groups = grouping::offline(&layout.items);
         for group in &mut groups {
+            if self.scenario == "mixed"
+                && [
+                    "Games",
+                    "Development",
+                    "Design & 3D",
+                    "Communication",
+                    "Audio & music",
+                ]
+                .contains(&group.name.as_str())
+            {
+                layout
+                    .screen_categories
+                    .insert(i18n::translate(self.language, &group.name).to_owned());
+            }
             group.name = i18n::translate(self.language, &group.name).to_owned();
         }
         grouping::apply(&mut layout, &groups)?;
+        if self.scenario == "mixed" {
+            for group in &mut layout.groups {
+                group.on_screen = layout.screen_categories.contains(&group.name);
+                if group.on_screen {
+                    let region = if group.name == i18n::translate(self.language, "Games") {
+                        crate::regions::Region {
+                            left: 3,
+                            top: 0,
+                            columns: 3,
+                            rows: 2,
+                        }
+                    } else if group.name == i18n::translate(self.language, "Development") {
+                        crate::regions::Region {
+                            left: 0,
+                            top: 0,
+                            columns: 3,
+                            rows: 2,
+                        }
+                    } else if group.name == i18n::translate(self.language, "Design & 3D") {
+                        crate::regions::Region {
+                            left: 6,
+                            top: 0,
+                            columns: 2,
+                            rows: 2,
+                        }
+                    } else if group.name == i18n::translate(self.language, "Communication") {
+                        crate::regions::Region {
+                            left: 4,
+                            top: 2,
+                            columns: 4,
+                            rows: 2,
+                        }
+                    } else {
+                        crate::regions::Region {
+                            left: 0,
+                            top: 2,
+                            columns: 4,
+                            rows: 2,
+                        }
+                    };
+                    group.placement.region = Some(region);
+                }
+            }
+        }
         layout.validate()?;
         Ok(layout)
     }
@@ -160,7 +228,17 @@ impl Options {
 pub(super) unsafe fn save(options: &Options, main: HWND) -> Result<()> {
     unsafe {
         let started = Instant::now();
-        let target = if options.screen == "group" {
+        let target = if options.screen == "conversation" || options.screen == "arrangement" {
+            APP.with(|cell| {
+                let borrow = cell.borrow();
+                let app = borrow.as_ref().unwrap();
+                if options.screen == "conversation" {
+                    app.conversation.window
+                } else {
+                    app.arrangement.window
+                }
+            })
+        } else if options.screen == "group" {
             APP.with(|cell| {
                 cell.borrow().as_ref().and_then(|app| {
                     app.layout
@@ -175,7 +253,11 @@ pub(super) unsafe fn save(options: &Options, main: HWND) -> Result<()> {
         } else {
             main
         };
-        let (width, height) = if options.screen == "group" {
+        let (width, height) = if options.screen == "conversation" {
+            (860, 620)
+        } else if options.screen == "arrangement" {
+            (940, 680)
+        } else if options.screen == "group" {
             (360, 300)
         } else {
             (
@@ -258,21 +340,39 @@ pub(super) unsafe fn save(options: &Options, main: HWND) -> Result<()> {
         );
         let old = SelectObject(dc, bitmap);
         SendMessageW(target, WM_PRINTCLIENT, dc as usize, PRF_CLIENT as isize);
-        if target == main {
-            let controls: Vec<_> = APP.with(|cell| {
-                cell.borrow()
-                    .as_ref()
-                    .unwrap()
-                    .controls
-                    .iter()
-                    .filter(|c| GetWindowLongPtrW(c.hwnd, GWL_STYLE) as u32 & WS_VISIBLE != 0)
-                    .map(|c| c.hwnd)
-                    .collect()
-            });
+        {
+            let controls: Vec<_> = if target == main {
+                APP.with(|cell| {
+                    cell.borrow()
+                        .as_ref()
+                        .unwrap()
+                        .controls
+                        .iter()
+                        .filter(|c| GetWindowLongPtrW(c.hwnd, GWL_STYLE) as u32 & WS_VISIBLE != 0)
+                        .map(|c| c.hwnd)
+                        .collect()
+                })
+            } else {
+                unsafe extern "system" fn collect(child: HWND, param: LPARAM) -> BOOL {
+                    unsafe {
+                        if GetWindowLongPtrW(child, GWL_STYLE) as u32 & WS_VISIBLE != 0 {
+                            (*(param as *mut Vec<HWND>)).push(child);
+                        }
+                        1
+                    }
+                }
+                let mut children = vec![];
+                EnumChildWindows(
+                    target,
+                    Some(collect),
+                    &mut children as *mut Vec<HWND> as isize,
+                );
+                children
+            };
             for child in controls {
                 let mut r = RECT::default();
                 GetWindowRect(child, &mut r);
-                MapWindowPoints(null_mut(), main, &mut r as *mut RECT as *mut POINT, 2);
+                MapWindowPoints(null_mut(), target, &mut r as *mut RECT as *mut POINT, 2);
                 SaveDC(dc);
                 IntersectClipRect(dc, r.left, r.top, r.right, r.bottom);
                 SetViewportOrgEx(dc, r.left, r.top, null_mut());
@@ -284,7 +384,10 @@ pub(super) unsafe fn save(options: &Options, main: HWND) -> Result<()> {
                 );
                 // Hidden native combo boxes omit their owner-drawn selection in WM_PRINT.
                 // Render that actual HWND selection through the production owner-draw path.
-                if matches!(GetDlgCtrlID(child) as u16, LANGUAGE | THEME) {
+                let mut class = [0u16; 64];
+                let length =
+                    GetClassNameW(child, class.as_mut_ptr(), class.len() as i32).max(0) as usize;
+                if String::from_utf16_lossy(&class[..length]).eq_ignore_ascii_case("ComboBox") {
                     let mut selection = RECT::default();
                     GetClientRect(child, &mut selection);
                     selection.left += 2;

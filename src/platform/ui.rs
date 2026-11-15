@@ -37,9 +37,19 @@ use windows_sys::{
     },
     core::*,
 };
+mod arrangement;
 mod capture;
+mod conversation;
 mod diagnostic;
+mod organization;
 mod theme;
+const AI_CHAT: u16 = 220;
+const AI_CHAT_SEND: u16 = 221;
+const AI_ACTIVITY: u16 = 222;
+const FORGET_CHOICES: u16 = 223;
+const ARRANGE: u16 = 224;
+const ARRANGE_APPLY: u16 = 225;
+const SCREEN_CATEGORY: u16 = 226;
 const PROPOSALS: u16 = 180;
 const PROPOSAL_NAME: u16 = 181;
 const RENAME_PROPOSAL: u16 = 182;
@@ -205,6 +215,9 @@ struct App {
     source_ids: Option<HashSet<u64>>,
     organize_after_scan: bool,
     main_surface: Option<MainSurface>,
+    conversation: conversation::Conversation,
+    arrangement: arrangement::Editor,
+    pending_organization: Option<Vec<grouping::Suggestion>>,
 }
 static CAPTURE_DPI: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 static MAIN_PAINTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -218,6 +231,36 @@ static MAIN_PRINT_MESSAGES: std::sync::atomic::AtomicU64 = std::sync::atomic::At
 static REFRESHES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static STATUS_UPDATES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static MAIN_BLITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static AUX_PAINTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static AUX_LAYOUTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+unsafe fn style_dialog_control(hwnd: HWND) {
+    SetWindowTheme(
+        hwnd,
+        if i18n::dark() {
+            w!("DarkMode_Explorer")
+        } else {
+            w!("Explorer")
+        },
+        null(),
+    );
+    SetWindowSubclass(hwnd, Some(dialog_control_proc), 1, 0);
+}
+unsafe extern "system" fn dialog_control_proc(
+    hwnd: HWND,
+    msg: u32,
+    wp: WPARAM,
+    lp: LPARAM,
+    id: usize,
+    _: usize,
+) -> LRESULT {
+    if msg == WM_PAINT {
+        AUX_PAINTS.fetch_add(1, Ordering::Relaxed);
+    }
+    if msg == WM_NCDESTROY {
+        RemoveWindowSubclass(hwnd, Some(dialog_control_proc), id);
+    }
+    DefSubclassProc(hwnd, msg, wp, lp)
+}
 fn window_dpi(hwnd: HWND) -> u32 {
     let override_dpi = CAPTURE_DPI.load(Ordering::Relaxed);
     if override_dpi > 0 {
@@ -230,12 +273,15 @@ fn window_dpi(hwnd: HWND) -> u32 {
 fn wide(s: impl AsRef<OsStr>) -> Vec<u16> {
     s.as_ref().encode_wide().chain(Some(0)).collect()
 }
-fn localized_offline(items: &[Item]) -> Vec<grouping::Suggestion> {
+fn localized_offline(
+    items: &[Item],
+    corrections: &[crate::memory::Correction],
+) -> Vec<grouping::Suggestion> {
     let mut groups = grouping::offline(items);
     for group in &mut groups {
         group.name = tr(&group.name).to_owned();
     }
-    groups
+    crate::memory::apply(groups, items, corrections)
 }
 fn word(v: usize) -> u16 {
     (v & 0xffff) as u16
@@ -418,6 +464,9 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
         },
         organize_after_scan: false,
         main_surface: None,
+        conversation: Default::default(),
+        arrangement: Default::default(),
+        pending_organization: None,
     };
     APP.with(|cell| {
         *cell.borrow_mut() = Some(app);
@@ -428,6 +477,7 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
     APP.with(|cell| -> Result<()> {
         let mut borrow = cell.borrow_mut();
         let app = borrow.as_mut().unwrap();
+        app.conversation.guidance=app.layout.settings.ai_grouping_guidance.clone();
         app.create_controls();
         app.refresh();
         app.rebuild_groups()?;
@@ -449,19 +499,27 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
                 SendMessageW(app.c(AI_ITEMS), LB_SETSEL, 1, -1);
             }
             if !app.scope.is_empty() && options.scenario != "no-preview" {
-                app.set_suggestions(localized_offline(&app.scope))?;
+                app.set_suggestions(localized_offline(&app.scope, &app.layout.corrections))?;
             }
             if options.screen == "moves" {
-                let groups = localized_offline(&app.scope);
+                let groups = localized_offline(&app.scope, &app.layout.corrections);
+                let (items,folders)=organization::folder_subset(&app.scope,&groups,&app.layout.screen_categories);
+                app.pending_organization=Some(groups);
                 app.show_move_preview(crate::operations::preview(
                     &app.layout.settings.root,
-                    &app.scope,
-                    &groups,
+                    &items,
+                    &folders,
                 )?);
             }
             if options.scenario == "ai-connected" {
                 app.ai_test_result(app.ai_revision, Ok(()));
             }
+            if options.screen=="conversation" {
+                app.conversation.begin(app.scope.len(),tr("Keep game launchers together. Separate creative tools from development."));
+                app.conversation.progress(ai::Progress::Answer(1,tr("Games and launchers belong together. Development and creative tools have separate categories. Unclear shortcuts remain for review.").into(),432));
+                app.conversation.show(app.hwnd,app.font);app.conversation.prepare_capture();
+            }
+            if options.screen=="arrangement" {app.arrangement.show(app.hwnd,app.font,&app.layout);}
             app.status("");
             if options.scenario == "http-server" {
                 app.set_update(updates::PUBLIC_RELEASE_UNAVAILABLE);
@@ -546,7 +604,17 @@ unsafe fn startup(diagnostic: Option<capture::Options>) -> Result<()> {
             trace(&format!("message loop ended: {result}"));
             break;
         }
-        if IsDialogMessageW(hwnd, &message) == 0 {
+        let dialogs = APP.with(|cell| {
+            let borrow = cell.borrow();
+            let app = borrow.as_ref().unwrap();
+            [app.conversation.window, app.arrangement.window]
+        });
+        let handled = dialogs.into_iter().any(|dialog| {
+            !dialog.is_null()
+                && IsWindowVisible(dialog) != 0
+                && IsDialogMessageW(dialog, &message) != 0
+        });
+        if !handled && IsDialogMessageW(hwnd, &message) == 0 {
             TranslateMessage(&message);
             DispatchMessageW(&message);
         }
@@ -766,6 +834,9 @@ unsafe extern "system" fn group_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARA
             }
             WM_ERASEBKGND => 1,
             WM_EXITSIZEMOVE => {
+                if let Some(group) = app.layout.groups.iter_mut().find(|g| g.id == id) {
+                    group.placement.region = None;
+                }
                 app.capture_placement(id);
                 app.changed();
                 0
@@ -794,8 +865,21 @@ unsafe extern "system" fn group_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARA
                 let p = &mut *(lp as *mut MINMAXINFO);
                 let dpi = window_dpi(hwnd);
                 p.ptMinTrackSize = POINT {
-                    x: scale(240, dpi),
-                    y: scale(90, dpi),
+                    x: scale(280, dpi),
+                    y: scale(
+                        if app
+                            .layout
+                            .groups
+                            .iter()
+                            .find(|g| g.id == id)
+                            .is_some_and(|g| g.collapsed)
+                        {
+                            90
+                        } else {
+                            240
+                        },
+                        dpi,
+                    ),
                 };
                 0
             }
@@ -868,6 +952,12 @@ unsafe extern "system" fn group_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARA
                         ScreenToClient(target, &mut point);
                         let before = app.hit_item_at(target_id, point.x, point.y);
                         if app.layout.place_item(drag.item, target_id, before) {
+                            if let Some(group) =
+                                app.layout.groups.iter().find(|g| g.id == target_id)
+                            {
+                                let name = group.name.clone();
+                                app.remember_choice(&[drag.item], &name);
+                            }
                             for (group_id, window) in &mut app.windows {
                                 if *group_id == target_id {
                                     window.selected = Some(drag.item);
@@ -1628,7 +1718,19 @@ impl App {
                 let text = if list_id == ITEMS {
                     format!("{}    ·    {}", item.name, group)
                 } else {
-                    format!("{}    ·    {}", item.name, tr(&item.category))
+                    format!(
+                        "{}    ·    {}",
+                        item.name,
+                        if item.evidence.product_name.is_empty() {
+                            tr(grouping::proposed_category(item)).to_owned()
+                        } else {
+                            format!(
+                                "{} · {}",
+                                item.evidence.product_name,
+                                tr(grouping::proposed_category(item))
+                            )
+                        }
+                    )
                 };
                 SendMessageW(list, LB_ADDSTRING, 0, wide(text).as_ptr() as _);
             }
@@ -1759,6 +1861,25 @@ impl App {
                 self.update_actions();
                 return Ok(());
             }
+            AI_CHAT => {
+                self.conversation.show(self.hwnd, self.font);
+                self.conversation.busy(self.task != 0);
+                return Ok(());
+            }
+            AI_CHAT_SEND => {
+                let guidance = self.conversation.input();
+                ensure!(
+                    !guidance.trim().is_empty(),
+                    tr("Enter a grouping instruction first.")
+                );
+                if let Err(error) = self.begin_ai(&guidance) {
+                    self.conversation.answer_error(&format!("{error:#}"));
+                    self.sync_ai_activity();
+                    return Err(error);
+                }
+                self.conversation.clear_input();
+                return Ok(());
+            }
             MOVE_OPT => {
                 InvalidateRect(self.hwnd, null(), 0);
                 self.update_actions();
@@ -1847,7 +1968,15 @@ impl App {
                 );
                 let id = self.selected_group();
                 if let Some(g) = self.layout.groups.iter_mut().find(|g| g.id == id) {
-                    g.name = name;
+                    let previous = std::mem::replace(&mut g.name, name);
+                    if self.layout.screen_categories.remove(&previous) {
+                        self.layout.screen_categories.insert(g.name.clone());
+                    }
+                }
+                if let Some(group) = self.layout.groups.iter().find(|g| g.id == id) {
+                    let ids = group.items.clone();
+                    let name = group.name.clone();
+                    self.remember_choice(&ids, &name);
                 }
                 self.refresh();
                 self.changed();
@@ -1875,8 +2004,13 @@ impl App {
             }
             ASSIGN => {
                 let target = self.selected_group();
-                for item in self.selected_items(ITEMS) {
+                let selected = self.selected_items(ITEMS);
+                for item in &selected {
                     self.layout.assign(item.id, target);
+                }
+                if let Some(group) = self.layout.groups.iter().find(|g| g.id == target) {
+                    let name = group.name.clone();
+                    self.remember_choice(&selected.iter().map(|i| i.id).collect::<Vec<_>>(), &name);
                 }
                 self.refresh();
                 self.invalidate_groups();
@@ -1886,10 +2020,18 @@ impl App {
                 let mut groups = ai::parse_content(&self.text(JSON), &self.scope)?;
                 let row = SendMessageW(self.c(PROPOSALS), LB_GETCURSEL, 0, 0);
                 ensure!(row >= 0, tr("Select a proposed group first"));
+                let old_name = groups[row as usize].name.clone();
                 groups[row as usize].name = self.text(PROPOSAL_NAME);
                 grouping::validate(&groups, &self.scope)?;
+                if self.layout.screen_categories.remove(&old_name) {
+                    self.layout
+                        .screen_categories
+                        .insert(groups[row as usize].name.clone());
+                }
+                self.remember_choice(&groups[row as usize].item_ids, &groups[row as usize].name);
                 self.set_suggestions(groups)?;
                 self.plan = None;
+                self.changed();
             }
             ASSIGN_PROPOSAL => {
                 let mut groups = ai::parse_content(&self.text(JSON), &self.scope)?;
@@ -1905,10 +2047,15 @@ impl App {
                     group.item_ids.retain(|id| !ids.contains(id));
                 }
                 groups[row as usize].item_ids.extend(ids);
+                self.remember_choice(
+                    &selected.iter().map(|i| i.id).collect::<Vec<_>>(),
+                    &groups[row as usize].name,
+                );
                 groups.retain(|g| !g.item_ids.is_empty());
                 grouping::validate(&groups, &self.scope)?;
                 self.set_suggestions(groups)?;
                 self.plan = None;
+                self.changed();
             }
             OFFLINE | REQUEST_AI => {
                 self.scope = self.selected_items(AI_ITEMS);
@@ -1918,7 +2065,7 @@ impl App {
                 );
                 self.plan = None;
                 if id == OFFLINE {
-                    let groups = localized_offline(&self.scope);
+                    let groups = localized_offline(&self.scope, &self.layout.corrections);
                     self.set_suggestions(groups)?;
                     self.status("Folder proposal ready. Review names, then choose Review file moves. Originals have not moved.");
                 } else {
@@ -1936,35 +2083,61 @@ impl App {
                             "AI supports up to 200 files at once. Use Suggest folders for all files or select a smaller batch."
                         )
                     );
-                    self.worker.submit(Job::Ai {
-                        base: self.layout.settings.ai_base_url.clone(),
-                        model: self.layout.settings.ai_model.clone(),
-                        key: self.layout.settings.protected_api_key.clone(),
-                        items: self.scope.clone(),
-                    })?;
-                    self.task = 2;
+                    self.begin_ai("")?;
                     self.status("Requesting metadata-only AI suggestions. Offline grouping remains available if the provider fails.");
                 }
             }
             APPLY_VISUAL => {
                 let groups = ai::parse_content(&self.text(JSON), &self.scope)?;
-                grouping::apply_selected(&mut self.layout, &groups, &self.scope)?;
+                for group in &groups {
+                    self.layout.screen_categories.insert(group.name.clone());
+                }
+                self.finish_organization(&groups)?;
+            }
+            SCREEN_CATEGORY => {
+                self.choose_category_mode()?;
+            }
+            ARRANGE => {
+                self.arrangement.show(self.hwnd, self.font, &self.layout);
+            }
+            ARRANGE_APPLY => {
+                self.arrangement.apply(&mut self.layout)?;
                 self.hidden = false;
                 self.fullscreen = false;
                 self.rebuild_groups()?;
-                self.refresh();
                 self.changed();
-                self.status("Visual groups applied. No files were moved.");
+                self.arrangement.hide();
+            }
+            FORGET_CHOICES => {
+                self.layout.corrections.clear();
+                self.layout.settings.ai_grouping_guidance.clear();
+                self.conversation.guidance.clear();
+                self.changed();
+                self.status("Saved grouping choices cleared.");
+                self.conversation.stage = tr("Saved grouping choices cleared.").into();
+                self.sync_ai_activity();
             }
             PREVIEW_MOVES => {
                 let text = self.text(JSON);
                 let groups = ai::parse_content(&text, &self.scope)?;
+                let mut validation = self.layout.clone();
+                grouping::apply_selected(&mut validation, &groups, &self.scope)?;
                 self.plan_json = text;
                 self.plan = None;
+                let (folder_items, folder_groups) = organization::folder_subset(
+                    &self.scope,
+                    &groups,
+                    &self.layout.screen_categories,
+                );
+                if folder_items.is_empty() {
+                    self.finish_organization(&groups)?;
+                    return Ok(());
+                }
+                self.pending_organization = Some(groups);
                 self.worker.submit(Job::Preview(
                     self.layout.settings.root.clone(),
-                    self.scope.clone(),
-                    groups,
+                    folder_items,
+                    folder_groups,
                 ))?;
                 self.task = 3;
                 self.status("Validating every source, destination and content fingerprint...");
@@ -2128,6 +2301,11 @@ impl App {
             (APPLY_VISUAL, ready && suggested),
             (RENAME_PROPOSAL, ready && suggested),
             (ASSIGN_PROPOSAL, ready && suggested),
+            (SCREEN_CATEGORY, ready && suggested),
+            (
+                ARRANGE,
+                ready && self.layout.groups.iter().any(|g| g.on_screen),
+            ),
             (
                 OFFLINE,
                 ready && SendMessageW(self.c(AI_ITEMS), LB_GETSELCOUNT, 0, 0) > 0,
@@ -2166,10 +2344,9 @@ impl App {
             SCAN_DESKTOP => !self.tidy_items.is_empty(),
             ADD_DESKTOP | TIDY_ADD_FOLDER => self.tidy_items.is_empty(),
             AI_ITEMS | SELECT_ALL | OFFLINE | CONSENT | REQUEST_AI | MOVE_OPT
-            | AI_TIDY_CONNECTION => !self.tidy_items.is_empty(),
-            PROPOSALS | PROPOSAL_NAME | RENAME_PROPOSAL | ASSIGN_PROPOSAL | APPLY_VISUAL => {
-                !unsafe { self.text(JSON) }.is_empty()
-            }
+            | AI_TIDY_CONNECTION | AI_CHAT | AI_ACTIVITY => !self.tidy_items.is_empty(),
+            PROPOSALS | PROPOSAL_NAME | RENAME_PROPOSAL | ASSIGN_PROPOSAL | APPLY_VISUAL
+            | SCREEN_CATEGORY => !unsafe { self.text(JSON) }.is_empty(),
             STATUS => !unsafe { self.text(STATUS) }.is_empty(),
             ITEMS => self.page == 1 && !self.layout.items.is_empty(),
             PREVIEW_MOVES => !unsafe { self.text(JSON) }.is_empty(),
@@ -2257,25 +2434,48 @@ impl App {
                     self.task = 0;
                     self.import_result(group, result, false);
                 }
+                Event::AiProgress(progress) => {
+                    self.conversation.progress(progress);
+                    self.sync_ai_activity();
+                }
+                Event::AiPrepared(items) => {
+                    for item in &items {
+                        if let Some(existing) = self
+                            .layout
+                            .items
+                            .iter_mut()
+                            .find(|i| i.id == item.id && i.path == item.path)
+                        {
+                            existing.evidence = item.evidence.clone();
+                        }
+                    }
+                    self.scope = items;
+                    self.refresh();
+                }
                 Event::Suggested(result) => {
                     self.task = 0;
                     match result {
-                        Ok(groups) => {
+                        Ok(proposal) => {
+                            self.conversation.finish(&proposal);
                             if !self.ai_settings_dirty() {
                                 self.set_ai_connection(
                                     AiConnection::Connected,
                                     &trf!("Connected · {}", self.layout.settings.ai_model),
                                 );
                             }
-                            if let Err(error) = self.set_suggestions(groups) {
+                            if let Err(error) = self.set_suggestions(proposal.groups) {
                                 self.error(error);
                             }
                             self.status(
                                 "AI folder proposal ready. Choose Review file moves to check the destinations.",
                             );
                         }
-                        Err(e) => self.error(e),
+                        Err(e) => {
+                            self.conversation.answer_error(&format!("{e:#}"));
+                            self.error(e);
+                        }
                     }
+                    self.sync_ai_activity();
                 }
                 Event::AiTested(revision, result) => {
                     self.task = 0;
@@ -2293,6 +2493,11 @@ impl App {
                     match result {
                         Ok(plan) => {
                             self.sync_paths(&plan);
+                            if let Some(groups) = self.pending_organization.take()
+                                && let Err(error) = self.finish_organization(&groups)
+                            {
+                                self.error(error);
+                            }
                             self.set(JSON, "");
                             self.switch_page(2);
                             self.status("Desktop organized. Your files are in the reviewed folders. Undo moves is available.");
@@ -2427,20 +2632,46 @@ impl App {
         self.changed();
     }
     unsafe fn show_move_preview(&mut self, plan: Plan) {
+        let screen = self
+            .pending_organization
+            .as_ref()
+            .map(|groups| {
+                groups
+                    .iter()
+                    .filter(|g| self.layout.screen_categories.contains(&g.name))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let screen_summary = screen
+            .iter()
+            .map(|g| format!("{} — {}", g.name, g.item_ids.len()))
+            .collect::<Vec<_>>()
+            .join("\r\n");
+        let prefix = if screen.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "{}\r\n{}\r\n\r\n{}\r\n",
+                tr("Kept on screen (originals stay in place):"),
+                screen_summary,
+                tr("Files moving into folders:")
+            )
+        };
         self.set(
             MOVES,
-            &plan
-                .moves
-                .iter()
-                .map(|m| {
-                    format!(
-                        "{}\r\n    → {}",
-                        m.source.display(),
-                        m.destination.display()
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\r\n\r\n"),
+            &(prefix
+                + &plan
+                    .moves
+                    .iter()
+                    .map(|m| {
+                        format!(
+                            "{}\r\n    → {}",
+                            m.source.display(),
+                            m.destination.display()
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\r\n\r\n")),
         );
         self.set(APPLY_MOVES, &trf!("Move {} files", plan.moves.len()));
         self.plan = Some(plan);
@@ -2475,22 +2706,31 @@ impl App {
     unsafe fn import_result(
         &mut self,
         group: u64,
-        result: Result<Vec<(PathBuf, bool)>>,
+        result: Result<Vec<(PathBuf, bool, crate::metadata::Evidence)>>,
         preserve_groups: bool,
     ) {
         match result {
             Ok(entries) => {
                 let first_import = self.layout.items.is_empty();
                 let scanned_paths: HashSet<_> =
-                    entries.iter().map(|(path, _)| path.clone()).collect();
+                    entries.iter().map(|(path, _, _)| path.clone()).collect();
                 let mut count = 0;
-                for (path, dir) in entries {
+                for (path, dir, evidence) in entries {
+                    let inspected_path = path.clone();
                     if if preserve_groups {
                         self.layout.refresh_reference(path, dir, group)
                     } else {
                         self.layout.import(path, dir, group)
                     } {
                         count += 1;
+                        if let Some(item) = self
+                            .layout
+                            .items
+                            .iter_mut()
+                            .find(|i| i.path == inspected_path)
+                        {
+                            item.evidence = evidence;
+                        }
                     }
                 }
                 if preserve_groups {
@@ -2516,7 +2756,10 @@ impl App {
                     SendMessageW(self.c(AI_ITEMS), LB_SETSEL, 1, -1);
                     self.scope = self.selected_items(AI_ITEMS);
                     if !self.scope.is_empty() {
-                        let result = self.set_suggestions(localized_offline(&self.scope));
+                        let result = self.set_suggestions(localized_offline(
+                            &self.scope,
+                            &self.layout.corrections,
+                        ));
                         if let Err(error) = result {
                             self.error(error);
                         } else {
@@ -2743,7 +2986,7 @@ impl App {
         for w in old.values() {
             DestroyWindow(w.hwnd);
         }
-        for group in &self.layout.groups {
+        for group in self.layout.groups.iter().filter(|g| g.on_screen) {
             let hwnd = CreateWindowExW(
                 WS_EX_TOOLWINDOW | WS_EX_LAYERED,
                 GROUP_CLASS,
@@ -3123,23 +3366,35 @@ unsafe fn place(hwnd: HWND, placement: &Placement, collapsed: bool) {
     let mut dx = 96;
     let mut dy = 96;
     GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dx, &mut dy);
-    let width = scale(placement.width.clamp(240, 1800), dx)
+    let mut width = scale(placement.width.clamp(280, 1800), dx)
         .min(area.right - area.left)
         .max(120);
-    let height = scale(
+    let mut height = scale(
         if collapsed {
             90
         } else {
-            placement.height.clamp(150, 1600)
+            placement.height.clamp(240, 1600)
         },
         dy,
     )
     .min(area.bottom - area.top)
     .max(60);
-    let x =
+    let mut x =
         (area.left + scale(placement.x, dx)).clamp(area.left, (area.right - width).max(area.left));
-    let y =
+    let mut y =
         (area.top + scale(placement.y, dy)).clamp(area.top, (area.bottom - height).max(area.top));
+    if let Some(region) = placement.region {
+        let (left, top, w, h) = region.pixels(
+            area.right - area.left,
+            area.bottom - area.top,
+            scale(280, dx),
+            scale(240, dy),
+        );
+        x = area.left + left;
+        y = area.top + top;
+        width = w;
+        height = if collapsed { scale(90, dy).min(h) } else { h };
+    }
     SetWindowPos(
         hwnd,
         null_mut(),

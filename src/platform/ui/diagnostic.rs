@@ -31,7 +31,7 @@ unsafe fn ui_cpu() -> Result<u64> {
     }
 }
 
-fn counters() -> [u64; 9] {
+fn counters() -> [u64; 11] {
     [
         MAIN_PAINTS.load(Ordering::Relaxed),
         GROUP_PAINTS.load(Ordering::Relaxed),
@@ -42,6 +42,8 @@ fn counters() -> [u64; 9] {
         REFRESHES.load(Ordering::Relaxed),
         STATUS_UPDATES.load(Ordering::Relaxed),
         MAIN_BLITS.load(Ordering::Relaxed),
+        AUX_PAINTS.load(Ordering::Relaxed),
+        AUX_LAYOUTS.load(Ordering::Relaxed),
     ]
 }
 unsafe fn cpu() -> Result<u64> {
@@ -85,7 +87,10 @@ unsafe fn pump(duration: Duration) -> Result<()> {
                 .min(1000) as u32;
             if timeout > 0 {
                 WAITS.fetch_add(1, Ordering::Relaxed);
-                MsgWaitForMultipleObjectsEx(0, null(), timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+                // PeekMessage drained queued input and dispatched sent messages above.
+                // Wait for NEW input; MWMO_INPUTAVAILABLE can repeatedly wake for
+                // already-observed accessibility traffic without a queued message.
+                MsgWaitForMultipleObjectsEx(0, null(), timeout, QS_ALLINPUT, 0);
             }
         }
         Ok(())
@@ -132,7 +137,7 @@ unsafe fn sample(state: &str) -> Result<serde_json::Value> {
             serde_json::json!({"state":state,"seconds":seconds,"cpu_seconds":cpu_seconds,
         "cpu_one_core_percent":100.0*cpu_seconds/seconds,"ui_thread_cpu_seconds":ui_seconds,"ui_thread_one_core_percent":100.0*ui_seconds/seconds,"message_waits":WAITS.load(Ordering::Relaxed)-waits_before,"messages":messages,
         "cpu_machine_percent":100.0*cpu_seconds/seconds/std::thread::available_parallelism().map(|n|n.get()).unwrap_or(1) as f64,
-        "main_rasters":delta[0],"group_rasters":delta[1],"layouts":delta[2],"owner_draws":delta[3],"wm_paint":delta[4],"wm_printclient":delta[5],"refreshes":delta[6],"status_updates":delta[7],"main_blits":delta[8]}),
+        "main_rasters":delta[0],"group_rasters":delta[1],"layouts":delta[2],"owner_draws":delta[3],"wm_paint":delta[4],"wm_printclient":delta[5],"refreshes":delta[6],"status_updates":delta[7],"main_blits":delta[8],"dialog_paints":delta[9],"dialog_layouts":delta[10]}),
         )
     }
 }
@@ -366,8 +371,37 @@ pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
             app.hidden = false;
             app.show_groups();
             app.register_tray();
+            app.conversation.begin(3, "Keep game launchers together.");
+            app.conversation.progress(ai::Progress::Answer(
+                1,
+                "Games and development tools have separate categories.".into(),
+                200,
+            ));
+            app.conversation.show(app.hwnd, app.font);
+            app.arrangement.show(app.hwnd, app.font, &app.layout);
+            ShowWindow(app.conversation.window, SW_SHOWNOACTIVATE);
+            ShowWindow(app.arrangement.window, SW_SHOWNOACTIVATE);
+            app.conversation.refresh();
         });
         ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        let auxiliary_verified = APP.with(|cell| -> Result<bool> {
+            let borrow = cell.borrow();
+            let app = borrow.as_ref().unwrap();
+            let mut check = app.layout.clone();
+            app.arrangement.apply(&mut check)?;
+            check.validate()?;
+            Ok(IsWindowVisible(app.conversation.window) != 0
+                && IsWindowVisible(app.arrangement.window) != 0
+                && check
+                    .groups
+                    .iter()
+                    .filter(|g| g.on_screen)
+                    .all(|g| g.placement.region.is_some()))
+        })?;
+        ensure!(
+            auxiliary_verified,
+            "Conversation or region editor regression"
+        );
         let visible = sample("visible settled")?;
         let before_exposure = MAIN_PAINTS.load(Ordering::Relaxed);
         for _ in 0..10 {
@@ -421,6 +455,8 @@ pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
             let app = borrow.as_mut().unwrap();
             app.hidden = true;
             app.show_groups();
+            ShowWindow(app.conversation.window, SW_HIDE);
+            ShowWindow(app.arrangement.window, SW_HIDE);
         });
         let hidden = sample("hidden settled")?;
         SendMessageW(hwnd, RESTORE, 0, 0);
@@ -429,6 +465,8 @@ pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
             let app = borrow.as_mut().unwrap();
             app.hidden = false;
             app.show_groups();
+            ShowWindow(app.conversation.window, SW_SHOWNOACTIVATE);
+            ShowWindow(app.arrangement.window, SW_SHOWNOACTIVATE);
         });
         let restored_visible = IsWindowVisible(hwnd) != 0;
         let restored = sample("restored settled")?;
@@ -448,7 +486,7 @@ pub(super) unsafe fn run(options: &capture::Options, hwnd: HWND) -> Result<()> {
         let report = serde_json::json!({"pid":std::process::id(),"executable":std::env::current_exe()?,"profile":"release",
         "backend":"CPU GDI / native Win32 controls; no GPU renderer","fixture_items":APP.with(|c|c.borrow().as_ref().unwrap().layout.items.len()),
         "tray_registered":tray_registered,"tray_removed_before_exit":tray_removed,"system_close_preserved_window":close_preserved_window,"system_close_hid_to_tray":close_hid_to_tray,
-        "restore_visible":restored_visible,"settings":settings_check,"workflow":workflow_check,"unchanged_exposures":10,"unchanged_exposure_rasters":exposure_rasters,"navigation":transitions,"samples":[visible,after_navigation,hidden,restored,restored_followup],
+        "restore_visible":restored_visible,"conversation_and_arrangement_verified":auxiliary_verified,"settings":settings_check,"workflow":workflow_check,"unchanged_exposures":10,"unchanged_exposure_rasters":exposure_rasters,"navigation":transitions,"samples":[visible,after_navigation,hidden,restored,restored_followup],
         "gpu_telemetry":"not collected; compositor/driver timing is not certified",
         "scope":"isolated in-process integration and idle load; physical tray clicks and keyboard traversal not tested"});
         fs::create_dir_all(options.output.parent().context("Missing report parent")?)?;

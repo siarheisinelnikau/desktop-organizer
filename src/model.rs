@@ -13,6 +13,8 @@ pub struct Item {
     pub extension: String,
     pub kind: String,
     pub category: String,
+    #[serde(default, skip_serializing_if = "crate::metadata::Evidence::is_empty")]
+    pub evidence: crate::metadata::Evidence,
 }
 
 impl Item {
@@ -48,6 +50,7 @@ impl Item {
             extension,
             kind,
             category,
+            evidence: Default::default(),
         }
     }
 }
@@ -74,6 +77,7 @@ pub struct Placement {
     pub y: i32,
     pub width: i32,
     pub height: i32,
+    pub region: Option<crate::regions::Region>,
 }
 impl Default for Placement {
     fn default() -> Self {
@@ -83,6 +87,7 @@ impl Default for Placement {
             y: 64,
             width: 360,
             height: 340,
+            region: None,
         }
     }
 }
@@ -94,6 +99,11 @@ pub struct Group {
     pub items: Vec<u64>,
     pub placement: Placement,
     pub collapsed: bool,
+    #[serde(default = "default_true")]
+    pub on_screen: bool,
+}
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -108,6 +118,7 @@ pub struct Settings {
     pub accent: u32,
     pub ai_base_url: String,
     pub ai_model: String,
+    pub ai_grouping_guidance: String,
     pub protected_api_key: Vec<u8>,
 }
 impl Default for Settings {
@@ -122,6 +133,7 @@ impl Default for Settings {
             accent: 0x00b89a57,
             ai_base_url: "http://localhost:8080/v1".into(),
             ai_model: "universal".into(),
+            ai_grouping_guidance: String::new(),
             protected_api_key: vec![],
         }
     }
@@ -135,6 +147,8 @@ pub struct Layout {
     pub items: Vec<Item>,
     pub groups: Vec<Group>,
     pub settings: Settings,
+    pub corrections: Vec<crate::memory::Correction>,
+    pub screen_categories: std::collections::BTreeSet<String>,
 }
 impl Default for Layout {
     fn default() -> Self {
@@ -148,8 +162,11 @@ impl Default for Layout {
                 items: vec![],
                 placement: Placement::default(),
                 collapsed: false,
+                on_screen: true,
             }],
             settings: Settings::default(),
+            corrections: vec![],
+            screen_categories: Default::default(),
         }
     }
 }
@@ -173,6 +190,7 @@ impl Layout {
             items: vec![],
             placement,
             collapsed: false,
+            on_screen: true,
         });
         Some(id)
     }
@@ -293,9 +311,24 @@ impl Layout {
             "Layout ID space exhausted"
         );
         ensure!(
+            self.items.iter().all(|i| i.evidence.valid())
+                && self
+                    .groups
+                    .iter()
+                    .all(|g| g.placement.region.is_none_or(|r| r.valid()))
+                && self.corrections.len() <= crate::memory::MAX_CORRECTIONS
+                && self.corrections.iter().all(|c| c.key.len() == 64
+                    && c.key.bytes().all(|b| b.is_ascii_hexdigit())
+                    && !c.group.trim().is_empty()
+                    && c.group.chars().count() <= 60
+                    && !c.group.chars().any(char::is_control)),
+            "Invalid program evidence, region or saved correction"
+        );
+        ensure!(
             self.settings.opacity >= 150
                 && self.settings.ai_base_url.len() <= 4096
                 && self.settings.ai_model.len() < 256
+                && self.settings.ai_grouping_guidance.chars().count() <= 3800
                 && self.settings.protected_api_key.len() <= 64 * 1024,
             "Settings outside limits"
         );

@@ -132,7 +132,13 @@ pub(super) unsafe fn draw_button(item: *const DRAWITEMSTRUCT) -> LRESULT {
         let selected = GetWindowLongPtrW(item.hwndItem, GWLP_USERDATA) != 0;
         let primary = matches!(
             id,
-            BROWSE | ADD_DESKTOP | PREVIEW_MOVES | APPLY_MOVES | SAVE_SETTINGS
+            BROWSE
+                | ADD_DESKTOP
+                | PREVIEW_MOVES
+                | APPLY_MOVES
+                | SAVE_SETTINGS
+                | AI_CHAT_SEND
+                | ARRANGE_APPLY
         );
         let pressed = item.itemState & ODS_SELECTED != 0;
         let background = if navigation {
@@ -414,9 +420,9 @@ impl App {
                 (REMOVE, "Remove from list"),
                 (SELECT_ALL, "Select all"),
                 (OFFLINE, "Suggest folders"),
-                (APPLY_VISUAL, "Use visual groups only"),
+                (APPLY_VISUAL, "All categories on screen"),
                 (REQUEST_AI, "Ask my AI"),
-                (PREVIEW_MOVES, "Review file moves"),
+                (PREVIEW_MOVES, "Review organization"),
                 (APPLY_MOVES, "Move files"),
                 (UNDO, "Undo moves"),
                 (CHECK, "Check updates"),
@@ -426,7 +432,17 @@ impl App {
             ] {
                 self.set(id, text);
             }
-            self.set(CONSENT, "Share selected names and file types with my AI");
+            self.set(CONSENT, "Share names and program details with my AI");
+            self.button(AI_CHAT, 2, "AI conversation", (780, 522, 180, 32));
+            self.control(AI_ACTIVITY, 2, w!("STATIC"), "", 0, (240, 558, 720, 22));
+            self.button(ARRANGE, 1, "Arrange on screen", (482, 656, 478, 34));
+            self.check(
+                SCREEN_CATEGORY,
+                2,
+                "Keep this category on screen",
+                (590, 394, 370, 28),
+                false,
+            );
             self.set(MOVE_OPT, "Move originals into folders — review first");
             self.set(FULLSCREEN, "Hide groups while I use a fullscreen app");
             self.control(
@@ -441,7 +457,7 @@ impl App {
             self.label(1, "Files stay right where they are.", (300, 160, 340, 22));
             self.label(1, "My files", (482, 234, 478, 26));
             self.label(2, "Files and shortcuts", (240, 116, 310, 24));
-            self.label(2, "Suggested folders", (590, 116, 370, 24));
+            self.label(2, "Categories", (590, 116, 370, 24));
             self.control(
                 PROPOSALS,
                 2,
@@ -606,7 +622,7 @@ impl App {
             );
             self.sync_theme_choices();
             self.apply_native_theme();
-            for id in [RENAME_PROPOSAL, ASSIGN_PROPOSAL, AI_SETUP] {
+            for id in [RENAME_PROPOSAL, ASSIGN_PROPOSAL, AI_SETUP, AI_CHAT, ARRANGE] {
                 let h = self.c(id);
                 SetWindowLongPtrW(
                     h,
@@ -626,6 +642,9 @@ impl App {
                 &serde_json::to_string(&serde_json::json!({"groups":groups}))?,
             );
             let list = self.c(PROPOSALS);
+            let selected = SendMessageW(list, LB_GETCURSEL, 0, 0)
+                .max(0)
+                .min(groups.len().saturating_sub(1) as isize);
             SendMessageW(list, LB_RESETCONTENT, 0, 0);
             for group in &groups {
                 SendMessageW(
@@ -633,19 +652,24 @@ impl App {
                     LB_ADDSTRING,
                     0,
                     wide(format!(
-                        "{}   ·   {} {}",
+                        "{}   ·   {} {} · {}",
                         group.name,
                         group.item_ids.len(),
                         if group.item_ids.len() == 1 {
                             tr("file")
                         } else {
                             tr("files")
+                        },
+                        if self.layout.screen_categories.contains(&group.name) {
+                            tr("On screen")
+                        } else {
+                            tr("Folder")
                         }
                     ))
                     .as_ptr() as _,
                 );
             }
-            SendMessageW(list, LB_SETCURSEL, 0, 0);
+            SendMessageW(list, LB_SETCURSEL, selected as usize, 0);
             self.proposal_selection();
             self.update_actions();
             InvalidateRect(self.hwnd, null(), 0);
@@ -660,6 +684,16 @@ impl App {
                 && let Some(group) = groups.get(row as usize)
             {
                 self.set(PROPOSAL_NAME, &group.name);
+                SendMessageW(
+                    self.c(SCREEN_CATEGORY),
+                    BM_SETCHECK,
+                    if self.layout.screen_categories.contains(&group.name) {
+                        BST_CHECKED
+                    } else {
+                        BST_UNCHECKED
+                    } as usize,
+                    0,
+                );
             }
         }
     }
@@ -868,16 +902,6 @@ impl App {
                         },
                         rect(594, 296, 346, 74),
                         15,
-                        muted(),
-                        false,
-                        dpi,
-                    );
-                } else {
-                    heading(
-                        dc,
-                        tr("Just a preview. You're in control."),
-                        rect(590, 396, 370, 22),
-                        14,
                         muted(),
                         false,
                         dpi,

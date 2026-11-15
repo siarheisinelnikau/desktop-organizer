@@ -1,7 +1,7 @@
 {
   "backend": "CPU GDI / native controls",
   "dpi": 96,
-  "elapsed_ms": 26,
+  "elapsed_ms": 19,
   "group_rasters": 0,
   "language": "english",
   "layouts": 3,
@@ -17,9 +17,9 @@
     1000,
     760
   ],
-  "scenario": "populated",
+  "scenario": "mixed",
   "scope": "client area, production Win32 controls and shared GDI renderer",
   "screen": "library",
   "theme": "light",
-  "version": "0.2.0"
+  "version": "0.3.0"
 }

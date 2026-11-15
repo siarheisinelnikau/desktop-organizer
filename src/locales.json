@@ -1,4 +1,116 @@
 {
+  "Browsers": [
+    "Браузеры",
+    "Navigateurs",
+    "Browser",
+    "Navegadores",
+    "Browser"
+  ],
+  "Development": [
+    "Разработка",
+    "Développement",
+    "Entwicklung",
+    "Desarrollo",
+    "Sviluppo"
+  ],
+  "Design & 3D": [
+    "Дизайн и 3D",
+    "Design et 3D",
+    "Design und 3D",
+    "Diseño y 3D",
+    "Design e 3D"
+  ],
+  "Photo editing": [
+    "Обработка фото",
+    "Retouche photo",
+    "Bildbearbeitung",
+    "Edición de fotos",
+    "Fotoritocco"
+  ],
+  "Video tools": [
+    "Видео",
+    "Outils vidéo",
+    "Videowerkzeuge",
+    "Herramientas de vídeo",
+    "Strumenti video"
+  ],
+  "Audio & music": [
+    "Аудио и музыка",
+    "Audio et musique",
+    "Audio und Musik",
+    "Audio y música",
+    "Audio e musica"
+  ],
+  "Games": [
+    "Игры",
+    "Jeux",
+    "Spiele",
+    "Juegos",
+    "Giochi"
+  ],
+  "Communication": [
+    "Общение",
+    "Communication",
+    "Kommunikation",
+    "Comunicación",
+    "Comunicazione"
+  ],
+  "Office & writing": [
+    "Офис и заметки",
+    "Bureautique et rédaction",
+    "Büro und Schreiben",
+    "Oficina y escritura",
+    "Ufficio e scrittura"
+  ],
+  "File tools": [
+    "Работа с файлами",
+    "Outils de fichiers",
+    "Dateiwerkzeuge",
+    "Herramientas de archivos",
+    "Strumenti per file"
+  ],
+  "Remote access": [
+    "Удалённый доступ",
+    "Accès à distance",
+    "Fernzugriff",
+    "Acceso remoto",
+    "Accesso remoto"
+  ],
+  "Security": [
+    "Безопасность",
+    "Sécurité",
+    "Sicherheit",
+    "Seguridad",
+    "Sicurezza"
+  ],
+  "System tools": [
+    "Системные утилиты",
+    "Outils système",
+    "Systemwerkzeuge",
+    "Herramientas del sistema",
+    "Strumenti di sistema"
+  ],
+  "AI tools": [
+    "Инструменты ИИ",
+    "Outils IA",
+    "KI-Werkzeuge",
+    "Herramientas de IA",
+    "Strumenti IA"
+  ],
+  "Installers": [
+    "Установщики",
+    "Programmes d’installation",
+    "Installationsprogramme",
+    "Instaladores",
+    "Programmi di installazione"
+  ],
+  "Needs review": [
+    "Нужна проверка",
+    "À vérifier",
+    "Zu prüfen",
+    "Por revisar",
+    "Da verificare"
+  ],
   "Language": [
     "Язык",
     "Langue",
@@ -1272,5 +1384,299 @@
     "Keine Verschiebungen geplant. Zurück zu den Ordnern und Plan prüfen.",
     "No hay movimientos previstos. Vuelve a las carpetas y revisa un plan.",
     "Nessuno spostamento pianificato. Torna alle cartelle e controlla un piano."
+  ],
+  "AI conversation": [
+    "Диалог с ИИ",
+    "Conversation IA",
+    "KI-Unterhaltung",
+    "Conversación con IA",
+    "Conversazione IA"
+  ],
+  "Send & regroup": [
+    "Отправить и собрать",
+    "Envoyer et regrouper",
+    "Senden und gruppieren",
+    "Enviar y reagrupar",
+    "Invia e raggruppa"
+  ],
+  "You": [
+    "Вы",
+    "Vous",
+    "Sie",
+    "Tú",
+    "Tu"
+  ],
+  "AI": [
+    "ИИ",
+    "IA",
+    "KI",
+    "IA",
+    "IA"
+  ],
+  "Error": [
+    "Ошибка",
+    "Erreur",
+    "Fehler",
+    "Error",
+    "Errore"
+  ],
+  "Organize the selected items by purpose.": [
+    "Распредели выбранные элементы по назначению.",
+    "Classez les éléments sélectionnés par usage.",
+    "Ausgewählte Elemente nach Zweck gruppieren.",
+    "Agrupa los elementos seleccionados por uso.",
+    "Raggruppa gli elementi selezionati per uso."
+  ],
+  "Reading program details: 0 / {}": [
+    "Чтение сведений о программах: 0 / {}",
+    "Lecture des programmes : 0 / {}",
+    "Programmdetails lesen: 0 / {}",
+    "Leyendo programas: 0 / {}",
+    "Lettura programmi: 0 / {}"
+  ],
+  "Reading program details: {} / {} · {}": [
+    "Сведения о программах: {} / {} · {}",
+    "Programmes : {} / {} · {}",
+    "Programmdetails: {} / {} · {}",
+    "Programas: {} / {} · {}",
+    "Programmi: {} / {} · {}"
+  ],
+  "Waiting for the model's first response…": [
+    "Ожидание первого ответа модели…",
+    "En attente de la première réponse…",
+    "Warten auf die erste Antwort…",
+    "Esperando la primera respuesta…",
+    "In attesa della prima risposta…"
+  ],
+  "Refining broad folders · waiting for the model…": [
+    "Уточнение общих групп · ожидание модели…",
+    "Affinage des groupes · attente du modèle…",
+    "Gruppen verfeinern · Warten auf das Modell…",
+    "Afinando grupos · esperando al modelo…",
+    "Affinamento gruppi · attesa del modello…"
+  ],
+  "Receiving answer · pass {} · {} characters": [
+    "Получение ответа · этап {} · {} символов",
+    "Réception · passage {} · {} caractères",
+    "Antwortempfang · Durchlauf {} · {} Zeichen",
+    "Recibiendo · pasada {} · {} caracteres",
+    "Ricezione · passaggio {} · {} caratteri"
+  ],
+  "Checking the proposed folders…": [
+    "Проверка предложенных групп…",
+    "Vérification des groupes…",
+    "Gruppenvorschlag prüfen…",
+    "Comprobando grupos…",
+    "Verifica dei gruppi…"
+  ],
+  "Proposal ready. Review it before applying.": [
+    "Предложение готово. Проверьте его перед применением.",
+    "Proposition prête. Vérifiez avant d’appliquer.",
+    "Vorschlag fertig. Vor dem Anwenden prüfen.",
+    "Propuesta lista. Revísala antes de aplicar.",
+    "Proposta pronta. Controlla prima di applicare."
+  ],
+  "Request failed. The existing preview is preserved.": [
+    "Запрос не удался. Текущее предложение сохранено.",
+    "Échec. La proposition précédente est conservée.",
+    "Anfrage fehlgeschlagen. Bisheriger Vorschlag bleibt.",
+    "Error. Se conserva la propuesta anterior.",
+    "Richiesta fallita. La proposta precedente è conservata."
+  ],
+  "Enter a grouping instruction first.": [
+    "Сначала введите пожелание к группировке.",
+    "Saisissez une consigne de classement.",
+    "Zuerst einen Gruppierungswunsch eingeben.",
+    "Escribe una instrucción de agrupación.",
+    "Inserisci prima un criterio di raggruppamento."
+  ],
+  "Share names and program details with my AI": [
+    "Передавать ИИ имена и сведения о программах",
+    "Partager les noms et détails des programmes avec mon IA",
+    "Namen und Programmdetails mit meiner KI teilen",
+    "Compartir nombres y detalles de programas con mi IA",
+    "Condividi nomi e dettagli dei programmi con la mia IA"
+  ],
+  "Forget grouping choices": [
+    "Сбросить группировку",
+    "Oublier mes choix de classement",
+    "Gruppierungswünsche vergessen",
+    "Olvidar mis preferencias de agrupación",
+    "Dimentica preferenze di raggruppamento"
+  ],
+  "Saved grouping choices cleared.": [
+    "Сохранённые правила группировки удалены.",
+    "Choix de classement effacés.",
+    "Gespeicherte Gruppierungswünsche gelöscht.",
+    "Preferencias de agrupación borradas.",
+    "Preferenze di raggruppamento cancellate."
+  ],
+  "Categories": [
+    "Категории",
+    "Catégories",
+    "Kategorien",
+    "Categorías",
+    "Categorie"
+  ],
+  "Folder": [
+    "В папку",
+    "Dossier",
+    "Ordner",
+    "Carpeta",
+    "Cartella"
+  ],
+  "On screen": [
+    "На экране",
+    "À l’écran",
+    "Auf dem Bildschirm",
+    "En pantalla",
+    "Sullo schermo"
+  ],
+  "Keep this category on screen": [
+    "Оставить эту категорию на экране",
+    "Garder cette catégorie à l’écran",
+    "Diese Kategorie auf dem Bildschirm behalten",
+    "Mantener esta categoría en pantalla",
+    "Mantieni questa categoria sullo schermo"
+  ],
+  "Review organization": [
+    "Проверить план",
+    "Vérifier le plan",
+    "Plan prüfen",
+    "Revisar el plan",
+    "Controlla il piano"
+  ],
+  "All categories on screen": [
+    "Все категории на экран",
+    "Tout afficher à l’écran",
+    "Alle Kategorien auf den Bildschirm",
+    "Todas las categorías en pantalla",
+    "Tutte le categorie sullo schermo"
+  ],
+  "Arrange on screen": [
+    "Разместить на экране",
+    "Disposer à l’écran",
+    "Auf dem Bildschirm anordnen",
+    "Distribuir en pantalla",
+    "Disponi sullo schermo"
+  ],
+  "Arrange categories on screen": [
+    "Размещение категорий на экране",
+    "Disposition des catégories à l’écran",
+    "Kategorien auf dem Bildschirm anordnen",
+    "Distribuir categorías en pantalla",
+    "Disponi le categorie sullo schermo"
+  ],
+  "Auto arrange": [
+    "Авторазмещение",
+    "Placement auto",
+    "Automatisch",
+    "Distribuir",
+    "Automatico"
+  ],
+  "Clear region": [
+    "Освободить область",
+    "Effacer la zone",
+    "Bereich freigeben",
+    "Liberar zona",
+    "Libera area"
+  ],
+  "Save & show groups": [
+    "Сохранить и показать группы",
+    "Enregistrer et afficher",
+    "Speichern und anzeigen",
+    "Guardar y mostrar grupos",
+    "Salva e mostra gruppi"
+  ],
+  "Select a category, then drag across the cells.": [
+    "Выберите категорию и выделите ячейки прямоугольником.",
+    "Choisissez une catégorie puis faites glisser sur les cellules.",
+    "Kategorie wählen und ein Rechteck über die Zellen ziehen.",
+    "Elige una categoría y arrastra por las celdas.",
+    "Scegli una categoria e trascina sulle celle."
+  ],
+  "Choose a category and monitor. Drag a rectangle; arrow keys move the selected region.": [
+    "Выберите категорию и монитор. Выделите прямоугольник; стрелки перемещают выбранную область.",
+    "Choisissez une catégorie et un écran. Tracez un rectangle ; les flèches déplacent la zone.",
+    "Kategorie und Monitor wählen. Rechteck ziehen; Pfeiltasten bewegen den Bereich.",
+    "Elige categoría y monitor. Dibuja un rectángulo; las flechas mueven la zona.",
+    "Scegli categoria e monitor. Traccia un rettangolo; le frecce spostano l’area."
+  ],
+  "Regions prepared. Adjust them, then save.": [
+    "Области подготовлены. Настройте их и сохраните.",
+    "Zones préparées. Ajustez puis enregistrez.",
+    "Bereiche vorbereitet. Anpassen und speichern.",
+    "Zonas preparadas. Ajústalas y guarda.",
+    "Aree pronte. Regola e salva."
+  ],
+  "That region is occupied. Choose free cells or clear the other category.": [
+    "Эта область занята. Выберите свободные ячейки или освободите другую категорию.",
+    "Zone occupée. Choisissez des cellules libres ou effacez l’autre zone.",
+    "Bereich belegt. Freie Zellen wählen oder anderen Bereich freigeben.",
+    "Zona ocupada. Elige celdas libres o libera la otra categoría.",
+    "Area occupata. Scegli celle libere o libera l’altra categoria."
+  ],
+  "Region selected. Icon size stays fixed; overflow scrolls.": [
+    "Область выбрана. Значки сохраняют размер; лишние доступны прокруткой.",
+    "Zone choisie. Taille des icônes fixe ; défilement si nécessaire.",
+    "Bereich gewählt. Symbolgröße bleibt fest; Überlauf wird gescrollt.",
+    "Zona elegida. Iconos de tamaño fijo; el resto se desplaza.",
+    "Area scelta. Icone a dimensione fissa; elementi in eccesso scorrevoli."
+  ],
+  "Some categories need a region. Use free cells, another monitor, or folders.": [
+    "Не всем категориям хватило места. Используйте свободные ячейки, другой монитор или папки.",
+    "Certaines catégories n’ont pas de zone. Utilisez un autre écran ou des dossiers.",
+    "Einige Kategorien brauchen einen Bereich. Freie Zellen, anderen Monitor oder Ordner nutzen.",
+    "Faltan zonas para algunas categorías. Usa celdas libres, otro monitor o carpetas.",
+    "Alcune categorie non hanno area. Usa celle libere, un altro monitor o cartelle."
+  ],
+  "Category destination saved. Review organization to apply the combined plan.": [
+    "Место категории сохранено. Проверьте общий план перед применением.",
+    "Destination enregistrée. Vérifiez le plan complet.",
+    "Ziel gespeichert. Gesamtplan vor dem Anwenden prüfen.",
+    "Destino guardado. Revisa el plan combinado.",
+    "Destinazione salvata. Controlla il piano completo."
+  ],
+  "Organization applied. Arrange screen categories; file moves remain undoable.": [
+    "План применён. Разместите экранные группы; перенос файлов можно отменить.",
+    "Plan appliqué. Disposez les groupes ; les déplacements restent annulables.",
+    "Plan angewendet. Bildschirmgruppen anordnen; Dateiverschiebungen bleiben umkehrbar.",
+    "Plan aplicado. Distribuye los grupos; los movimientos se pueden deshacer.",
+    "Piano applicato. Disponi i gruppi; gli spostamenti restano annullabili."
+  ],
+  "Kept on screen (originals stay in place):": [
+    "На экране (оригиналы остаются на месте):",
+    "À l’écran (originaux conservés en place) :",
+    "Auf dem Bildschirm (Originale bleiben am Ort):",
+    "En pantalla (originales sin mover):",
+    "Sullo schermo (originali nella posizione attuale):"
+  ],
+  "Files moving into folders:": [
+    "Файлы, перемещаемые в папки:",
+    "Fichiers déplacés dans des dossiers :",
+    "Dateien, die in Ordner verschoben werden:",
+    "Archivos que se moverán a carpetas:",
+    "File da spostare nelle cartelle:"
+  ],
+  "Keep game launchers together. Separate creative tools from development.": [
+    "Объедини игровые лаунчеры. Отдели творческие программы от разработки.",
+    "Regroupe les lanceurs de jeux. Sépare création et développement.",
+    "Spiele-Launcher zusammenfassen. Kreativprogramme von Entwicklung trennen.",
+    "Agrupa los lanzadores de juegos. Separa creación y desarrollo.",
+    "Raggruppa i launcher di giochi. Separa creatività e sviluppo."
+  ],
+  "Games and launchers belong together. Development and creative tools have separate categories. Unclear shortcuts remain for review.": [
+    "Игры и лаунчеры объединены. Разработка и творческие программы — в разных категориях. Непонятные ярлыки оставлены для проверки.",
+    "Jeux et lanceurs sont regroupés. Développement et création sont séparés. Les raccourcis ambigus restent à vérifier.",
+    "Spiele und Launcher sind zusammengefasst. Entwicklung und Kreativprogramme sind getrennt. Unklare Verknüpfungen bleiben zur Prüfung.",
+    "Juegos y lanzadores están juntos. Desarrollo y creación tienen categorías separadas. Los accesos ambiguos quedan por revisar.",
+    "Giochi e launcher sono insieme. Sviluppo e creatività hanno categorie separate. I collegamenti ambigui restano da verificare."
+  ],
+  "Categories changed. Reopen the region editor before saving.": [
+    "Категории изменились. Откройте редактор областей заново.",
+    "Les catégories ont changé. Rouvrez l’éditeur avant d’enregistrer.",
+    "Kategorien geändert. Bereichseditor vor dem Speichern erneut öffnen.",
+    "Las categorías cambiaron. Vuelve a abrir el editor antes de guardar.",
+    "Categorie modificate. Riapri l’editor prima di salvare."
   ]
 }

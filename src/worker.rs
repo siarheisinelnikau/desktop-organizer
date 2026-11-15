@@ -25,6 +25,8 @@ pub enum Job {
         model: String,
         key: Vec<u8>,
         items: Vec<Item>,
+        corrections: Vec<crate::memory::Correction>,
+        guidance: String,
     },
     TestAi {
         revision: u64,
@@ -42,9 +44,11 @@ pub enum Job {
 }
 pub enum Event {
     Saved(u64, Result<()>),
-    Scanned(Result<Vec<(PathBuf, bool)>>),
-    Imported(u64, Result<Vec<(PathBuf, bool)>>),
-    Suggested(Result<Vec<grouping::Suggestion>>),
+    Scanned(Result<Vec<(PathBuf, bool, crate::metadata::Evidence)>>),
+    Imported(u64, Result<Vec<(PathBuf, bool, crate::metadata::Evidence)>>),
+    AiProgress(ai::Progress),
+    AiPrepared(Vec<Item>),
+    Suggested(Result<ai::Proposal>),
     AiTested(u64, Result<()>),
     Previewed(Result<Plan>),
     Applied(Result<Plan>),
@@ -108,9 +112,32 @@ impl Worker {
                                 model,
                                 key,
                                 items,
+                                corrections,
+                                guidance,
                             } => {
+                                let mut items = items;
+                                let total = items.len();
+                                for (index, item) in items.iter_mut().enumerate() {
+                                    publish(Event::AiProgress(ai::Progress::Inspecting(
+                                        index + 1,
+                                        total,
+                                        item.name.clone(),
+                                    )));
+                                    item.evidence = crate::metadata::inspect(item);
+                                }
+                                publish(Event::AiPrepared(items.clone()));
                                 let result = with_api_key(key, |token| {
-                                    ai::request(&base, &model, token, &items)
+                                    ai::request_with_progress(
+                                        &ai::RequestContext {
+                                            base: &base,
+                                            model: &model,
+                                            api_key: token,
+                                            corrections: &corrections,
+                                            guidance: &guidance,
+                                        },
+                                        &items,
+                                        |progress| publish(Event::AiProgress(progress)),
+                                    )
                                 });
                                 Event::Suggested(result)
                             }
@@ -198,7 +225,7 @@ impl Drop for Worker {
     }
 }
 
-fn inspect(paths: Vec<PathBuf>) -> Result<Vec<(PathBuf, bool)>> {
+fn inspect(paths: Vec<PathBuf>) -> Result<Vec<(PathBuf, bool, crate::metadata::Evidence)>> {
     ensure!(
         paths.len() <= crate::model::MAX_ITEMS,
         "Too many dropped items"
@@ -208,11 +235,12 @@ fn inspect(paths: Vec<PathBuf>) -> Result<Vec<(PathBuf, bool)>> {
         operations::checked_path(&path, true)?;
         let meta = fs::symlink_metadata(&path)?;
         ensure!(meta.is_file() || meta.is_dir(), "Unsupported item type");
-        entries.push((path, meta.is_dir()));
+        let item = Item::from_path(0, path.clone(), meta.is_dir());
+        entries.push((path, meta.is_dir(), crate::metadata::inspect(&item)));
     }
     Ok(entries)
 }
-fn scan(root: PathBuf) -> Result<Vec<(PathBuf, bool)>> {
+fn scan(root: PathBuf) -> Result<Vec<(PathBuf, bool, crate::metadata::Evidence)>> {
     operations::checked_path(&root, true)?;
     let mut paths = vec![];
     for entry in fs::read_dir(root)? {

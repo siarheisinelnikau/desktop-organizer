@@ -5,8 +5,12 @@
 | Module | Responsibility |
 | --- | --- |
 | `model` | Versioned settings/layout, stable numeric IDs, one-group-per-item invariant, metadata/type categories |
-| `grouping` | Deterministic suggestions, exact selected-ID coverage, atomic visual application preserving unselected items |
+| `metadata` | Read-only saved Shell-link targets, safe EXE version-resource strings and URL host/protocol evidence; no target launch |
+| `memory` | Bounded explicit preferences keyed by local SHA-256 target/reference identities, local enforcement after model output |
+| `regions` | Validated monitor-relative cells, minimum dimensions, overlap and pixel geometry |
+| `purpose`, `grouping` | Conservative complete-word application-name hints, deterministic purpose/type suggestions, exact selected-ID coverage, atomic visual application preserving unselected items |
 | `ai` | Metadata allowlist, URL restrictions, bounded OpenAI-compatible request, strict untrusted JSON parsing |
+| `streaming` | Bounded SSE/public-content decoding, partial public-summary decoding and ordinary JSON fallback |
 | `operations` | Preview, root/name/reparse validation, fingerprints, source/directory locks, atomic no-replace rename, durable journal and undo |
 | `persistence` | Bounded JSON reads and flushed atomic writes |
 | `worker` | Two sleeping bounded workers/queues: serial file/state operations and serial network operations |
@@ -27,11 +31,28 @@ No startup scan is performed and no default Desktop path is assumed. Import/drop
 
 API tokens are DPAPI blobs in settings; no plaintext token is serialized or intentionally included in errors. Metadata consent is session-only. AI request bodies are constructed from an explicit metadata struct that has no path/content field. Response validation authorizes group names and ID assignments only, with another independent folder-plan validator before filesystem effects.
 
+Application hints use names plus available read-only program evidence. Unknown applications use Needs review; recognized shortcut target extensions can identify document references. The AI allowlist includes a tentative purpose_hint and selected program details, while omitting the old extension-only Applications category. The system prompt requests semantic purpose/topic groups and explicitly treats all supplied names/hints/proposals as untrusted data.
+
+AI grouping makes one initial request, then at most one bounded refinement request when a generic folder exceeds eight items or a folder exceeds twelve items with at least two name hints for each of at least two purposes. Only candidate folders' items and previous assignments enter refinement. Exact subset coverage, group-count capacity, strict JSON and whole-selection coverage are validated; equal folder names are merged with retained folders. Still-broad or invalid refinements fail without replacing the current preview. Each grouping request uses a 120-second transport timeout on the sleeping network worker. No recurring scan, model call or UI timer is introduced.
+
 AI base URLs accept HTTP and HTTPS. The provider panel updates a short unencrypted-transport warning when the address changes; saving is not blocked for HTTP. URL credentials/query/fragment remain disallowed, and requests never follow redirects. A bounded loopback HTTP fixture tests the production network worker through validated group application with a synthetic token.
 
 Update checking uses the shared core. Its current API returns textual failures, so the host maps the exact pinned GitHub 404 failure to a separate public-release-unavailable state. Other failures remain errors; neither becomes an up-to-date result. This adapter is covered by a regression test and does not alter shared download or installation behavior.
 
 ## Primary API references
+
+The v0.3.0 pipeline inspects selected items on background workers. Shell-link loading uses IPersistFile and IShellLinkW GetPath/GetDescription without Resolve. Arguments are used only for a local identity hash, distinguishing launchers that target the same EXE; raw arguments are not persisted or shared. Local fixed-drive EXE version strings use GetFileVersionInfoSizeW/GetFileVersionInfoW/VerQueryValueW with a bounded buffer and checked resource ranges. Unsupported or inaccessible targets retain partial/uncertain evidence. Full target paths never enter the AI metadata struct.
+
+The request allowlist adds program filenames, product/description/company strings, shortcut descriptions, website host/protocol and selected-item preferred categories. The prompt asks for a public summary followed by strict groups. SSE delta.content is bounded and coalesced to at most ten progress updates per second; reasoning fields are ignored. An event carries only decoded public summary text and a received-character count. Ordinary JSON responses remain supported. Each pass has a 120-second transport deadline. Failed or truncated responses never replace the current preview.
+
+Corrections and grouping guidance live in the existing atomic layout file. Explicit per-program choices are applied locally after response validation and excluded from automatic mixed-group refinement. A target hash survives an ordinary shortcut rename; a source-reference hash provides a fallback. Regrouping retains placements for surviving category names. No fine-tuning, background provider polling or inference service is installed.
+
+Folder/on-screen choices are persisted by category name. The organization planner creates an exact subset for folder categories, preserving the existing root/fingerprint/journal/undo restrictions; on-screen IDs never enter that file plan. Visual application happens after successful folder moves, using current item records. An independent preflight validates full grouping before filesystem work. A mixed move review lists both retained screen categories and exact source/destination paths.
+
+The modeless conversation and region editor use native controls and CPU GDI. Hidden conversation windows retain data without updating native text controls. Both windows have event-driven painting and no recurring timer. Their paint/layout counters join the bounded native diagnostic. The 8 × 6 cell editor fits minimum dimensions of 280 × 240 logical pixels, prevents overlaps and refuses a layout with unplaced categories. Group tiles keep the existing fixed geometry and scroll; normal window dragging returns a group to free placement. Saved regions are recomputed against the chosen monitor's work area after display changes.
+
+- [Shell links and IPersistFile loading](https://learn.microsoft.com/en-us/windows/win32/shell/links)
+- [Executable version-resource queries](https://learn.microsoft.com/en-us/windows/win32/api/winver/nf-winver-verqueryvaluew)
 
 - [Win32 message loop](https://learn.microsoft.com/en-us/windows/win32/winmsg/using-messages-and-message-queues)
 - [SetFileInformationByHandle](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-setfileinformationbyhandle) and [FILE_RENAME_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info)
@@ -56,4 +77,4 @@ Organize opens with Scan my Desktop instead of an import/selection workflow. It 
 
 The main background scene is retained in a compatible GDI bitmap keyed by viewport, DPI, scroll, page and structural UI state. Changed content rebuilds it; unchanged WM_PAINT/WM_PRINTCLIENT requests blit the retained scene. Native children keep their own control semantics. Scene rasters, cached blits, paint/print requests, model refreshes and status updates have distinct diagnostic counters. A ten-exposure regression verifies no unchanged-scene reconstruction.
 
-Tile order lives in each group's item-ID vector. The same placement operation supports within-group insertion and cross-group transfer; a background drop appends. The native context menu and Alt+Up/Down use the model's relative-order operation. Moving or sorting a reference does not resolve a Shell shortcut or touch its target. Normal file-plan validation remains necessary for explicit filesystem effects.
+Tile order lives in each group's item-ID vector. The same placement operation supports within-group insertion and cross-group transfer; a background drop appends. The native context menu and Alt+Up/Down use the model's relative-order operation. Reordering a reference does not inspect or launch its target; scanning and AI requests read saved shortcut metadata separately. Normal file-plan validation remains necessary for explicit filesystem effects.
